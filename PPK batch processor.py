@@ -64,6 +64,8 @@ class NavigationFile(BaseObservation):
 
 
 class PPKProcessorGUI:
+    CONFIG_FILE = 'config.json'
+
     def __init__(self, master):
         self.master = master
         self.master.title("Batch PPK Processor")
@@ -118,6 +120,13 @@ class PPKProcessorGUI:
         self.stats_file = Path("ppk_statistics.json")
         self.stats_data = {}
         self.load_statistics()
+        self.load_config()
+
+        # Add this line after other initializations
+        self.current_project_path = None
+        
+        # Add keyboard binding for Ctrl+S
+        self.master.bind('<Control-s>', lambda e: self.save_project())
 
     def create_menu(self):
         menubar = tk.Menu(self.master)
@@ -219,7 +228,7 @@ class PPKProcessorGUI:
         
         # Quick save to existing path
         self._do_save(self.current_project_path)
-        self.append_log(f"Project saved.\n")
+        self.append_log(f"Project saved to {self.current_project_path}\n")
 
     def save_project_as(self):
         # Always prompt for new location
@@ -291,8 +300,8 @@ class PPKProcessorGUI:
             with open(file_path, 'r') as f:
                 project_data = json.load(f)
 
-            # Clear current project
-            self.clear_all_fields()
+            # Set the current project path
+            self.current_project_path = file_path
 
             # Load project data
             self.exec_path_var.set(project_data['executable_path'])
@@ -835,6 +844,7 @@ class PPKProcessorGUI:
         path = filedialog.askdirectory(title="Select Output Directory")
         if path:
             self.output_path_var.set(path)
+            self.save_config()
 
     def start_batch_processing(self):
         # Validate inputs
@@ -1360,6 +1370,26 @@ class PPKProcessorGUI:
             self.view_pos_file(self.latest_pos_file)
         else:
             messagebox.showinfo("No Results", "No processed files found.")
+
+    def on_output_directory_change(self, new_output_dir):
+        """Handle output directory change"""
+        self.output_path_var.set(new_output_dir)
+        self.save_config()
+
+    def load_config(self):
+        """Load configuration from file"""
+        if os.path.exists(self.CONFIG_FILE):
+            with open(self.CONFIG_FILE, 'r') as f:
+                config = json.load(f)
+                self.output_path_var.set(config.get('output_directory', ''))
+
+    def save_config(self):
+        """Save configuration to file"""
+        config = {
+            'output_directory': self.output_path_var.get()
+        }
+        with open(self.CONFIG_FILE, 'w') as f:
+            json.dump(config, f)
 
 
 def main():
