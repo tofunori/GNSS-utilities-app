@@ -106,7 +106,7 @@ class PPKProcessorGUI:
         }
         
         self.selected_antenna = tk.StringVar(value=list(self.antenna_types.keys())[0])
-        self.manual_offset = tk.StringVar(value="0.0")
+        self.manual_offset = tk.StringVar(value="-0.00")
         self.total_offset = tk.StringVar(value=str(self.antenna_types[self.selected_antenna.get()]))
 
         # Create UI elements
@@ -470,12 +470,19 @@ class PPKProcessorGUI:
         ttk.Button(add_rover_delete_frame, text="Add Rover Files", command=self.add_rover_files).pack(side=tk.LEFT, padx=(0, 5))
         ttk.Button(add_rover_delete_frame, text="Delete Selected", command=self.delete_rover_files).pack(side=tk.LEFT)
 
-        self.rover_listbox = tk.Listbox(rover_frame, selectmode=tk.MULTIPLE, height=5)
-        self.rover_listbox.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        # Créer un conteneur pour la listbox et scrollbar
+        rover_container = ttk.Frame(rover_frame)
+        rover_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        rover_scroll = ttk.Scrollbar(rover_frame, orient="vertical", command=self.rover_listbox.yview)
+        self.rover_listbox = tk.Listbox(rover_container, selectmode=tk.MULTIPLE, height=5)
+        self.rover_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        rover_scroll = tk.Scrollbar(rover_container, orient="vertical")
         rover_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Connecter la scrollbar et la listbox
         self.rover_listbox.config(yscrollcommand=rover_scroll.set)
+        rover_scroll.config(command=self.rover_listbox.yview)
 
         # Base Files Selection
         base_frame = ttk.LabelFrame(self.left_content, text="Select Base Files")
@@ -487,12 +494,19 @@ class PPKProcessorGUI:
         ttk.Button(add_base_delete_frame, text="Add Base Files", command=self.add_base_files).pack(side=tk.LEFT, padx=(0, 5))
         ttk.Button(add_base_delete_frame, text="Delete Selected", command=self.delete_base_files).pack(side=tk.LEFT)
 
-        self.base_listbox = tk.Listbox(base_frame, selectmode=tk.MULTIPLE, height=5)
-        self.base_listbox.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        # Créer un conteneur pour la listbox et scrollbar
+        base_container = ttk.Frame(base_frame)
+        base_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        base_scroll = ttk.Scrollbar(base_frame, orient="vertical", command=self.base_listbox.yview)
+        self.base_listbox = tk.Listbox(base_container, selectmode=tk.MULTIPLE, height=5)
+        self.base_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        base_scroll = tk.Scrollbar(base_container, orient="vertical")
         base_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Connecter la scrollbar et la listbox
         self.base_listbox.config(yscrollcommand=base_scroll.set)
+        base_scroll.config(command=self.base_listbox.yview)
 
         # Navigation Files Selection
         nav_frame = ttk.LabelFrame(self.left_content, text="Select Navigation Files")
@@ -504,12 +518,19 @@ class PPKProcessorGUI:
         ttk.Button(add_nav_delete_frame, text="Add Navigation Files", command=self.add_nav_files).pack(side=tk.LEFT, padx=(0, 5))
         ttk.Button(add_nav_delete_frame, text="Delete Selected", command=self.delete_nav_files).pack(side=tk.LEFT)
 
-        self.nav_listbox = tk.Listbox(nav_frame, selectmode=tk.MULTIPLE, height=5)
-        self.nav_listbox.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        # Créer un conteneur pour la listbox et scrollbar
+        nav_container = ttk.Frame(nav_frame)
+        nav_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        nav_scroll = ttk.Scrollbar(nav_frame, orient="vertical", command=self.nav_listbox.yview)
+        self.nav_listbox = tk.Listbox(nav_container, selectmode=tk.MULTIPLE, height=5)
+        self.nav_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        nav_scroll = tk.Scrollbar(nav_container, orient="vertical")
         nav_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Connecter la scrollbar et la listbox
         self.nav_listbox.config(yscrollcommand=nav_scroll.set)
+        nav_scroll.config(command=self.nav_listbox.yview)
 
         # Output Directory Selection
         output_frame = ttk.LabelFrame(self.left_content, text="Output Directory")
