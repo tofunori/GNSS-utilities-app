@@ -245,23 +245,20 @@ class PPKProcessorGUI:
             # Debug logging
             self.append_log("Starting project save...\n")
             
+            # Get base coordinates
+            base_coords = {
+                'latitude': self.base_lat_var.get(),
+                'longitude': self.base_lon_var.get(),
+                'height': self.base_height_var.get()
+            }
+            
+            # Debug log pour vérifier les coordonnées
+            self.append_log(f"Saving base coordinates: {base_coords}\n")
+            
             # Get log content
             log_content = self.log_text.get(1.0, tk.END).strip()
-            self.append_log(f"Log content length: {len(log_content)}\n")
             
-            # Get statistics from treeview
-            statistics = []
-            for item in self.stats_tree.get_children():
-                values = self.stats_tree.item(item)['values']
-                if values:  # Check if values exist
-                    statistics.append({
-                        'file': str(values[0]),  # Convert to string to ensure serialization
-                        'status': str(values[1]),
-                        'processing_time': str(values[2])
-                    })
-            self.append_log(f"Statistics count: {len(statistics)}\n")
-
-            # Build project data with explicit type conversion
+            # Build project data
             project_data = {
                 'executable_path': str(self.exec_path_var.get()),
                 'config_path': str(self.config_path_var.get()),
@@ -269,12 +266,17 @@ class PPKProcessorGUI:
                 'base_files': [str(base.filepath) for base in self.base_obs_list],
                 'nav_files': [str(nav.filepath) for nav in self.nav_obs_list],
                 'config_settings': {k: str(v.get()) for k, v in self.config_settings.items()},
-                'logs': str(log_content),
-                'statistics': statistics
+                'base_coordinates': base_coords,  # Ajout des coordonnées ici
+                'logs': log_content,
+                'statistics': [
+                    {
+                        'file': str(self.stats_tree.item(item)['values'][0]),
+                        'status': str(self.stats_tree.item(item)['values'][1]),
+                        'processing_time': str(self.stats_tree.item(item)['values'][2])
+                    }
+                    for item in self.stats_tree.get_children()
+                ]
             }
-
-            # Debug output
-            self.append_log("Project data prepared. Saving...\n")
 
             # Save with explicit encoding
             with open(file_path, 'w', encoding='utf-8') as f:
@@ -287,7 +289,7 @@ class PPKProcessorGUI:
             error_msg = f"Failed to save project: {str(e)}"
             self.append_log(f"Error: {error_msg}\n")
             messagebox.showerror("Error", error_msg)
-            raise  # Re-raise for debugging
+            raise  # Pour le débogage
 
     def open_project(self):
         file_path = filedialog.askopenfilename(
@@ -307,7 +309,25 @@ class PPKProcessorGUI:
             self.exec_path_var.set(project_data['executable_path'])
             self.config_path_var.set(project_data['config_path'])
             
+            # Charger les coordonnées de base silencieusement
+            if 'base_coordinates' in project_data:
+                coords = project_data['base_coordinates']
+                self.base_lat_var.set(coords.get('latitude', ''))
+                self.base_lon_var.set(coords.get('longitude', ''))
+                self.base_height_var.set(coords.get('height', ''))
+                
+                # Appliquer les coordonnées au fichier de configuration silencieusement
+                if all(coords.values()):
+                    try:
+                        # Modification de apply_base_coordinates pour éviter les messages
+                        self.apply_base_coordinates(show_messages=False)
+                    except Exception as e:
+                        self.append_log(f"Error applying base coordinates: {str(e)}\n")
+            else:
+                self.append_log("No base coordinates found in project file\n")
+
             # Load rover files
+            self.rover_obs_list.clear()  # Clear existing files first
             for rover_path in project_data['rover_files']:
                 if os.path.exists(rover_path):
                     self.rover_obs_list.append(RoverObservation(Path(rover_path)))
@@ -315,6 +335,7 @@ class PPKProcessorGUI:
                     self.append_log(f"Warning: Rover file not found: {rover_path}\n")
 
             # Load base files
+            self.base_obs_list.clear()  # Clear existing files first
             for base_path in project_data['base_files']:
                 if os.path.exists(base_path):
                     self.base_obs_list.append(BaseObservation(Path(base_path)))
@@ -322,6 +343,7 @@ class PPKProcessorGUI:
                     self.append_log(f"Warning: Base file not found: {base_path}\n")
 
             # Load navigation files
+            self.nav_obs_list.clear()  # Clear existing files first
             for nav_path in project_data['nav_files']:
                 if os.path.exists(nav_path):
                     self.nav_obs_list.append(NavigationFile(Path(nav_path)))
@@ -329,7 +351,7 @@ class PPKProcessorGUI:
                     self.append_log(f"Warning: Navigation file not found: {nav_path}\n")
 
             # Load config settings
-            for key, value in project_data['config_settings'].items():
+            for key, value in project_data.get('config_settings', {}).items():
                 if key in self.config_settings:
                     self.config_settings[key].set(value)
 
@@ -341,6 +363,7 @@ class PPKProcessorGUI:
                 self.log_text.config(state='disabled')
 
             # Restore statistics
+            self.stats_tree.delete(*self.stats_tree.get_children())  # Clear existing stats
             if 'statistics' in project_data:
                 for stat in project_data['statistics']:
                     self.stats_tree.insert('', tk.END, values=(
@@ -422,6 +445,30 @@ class PPKProcessorGUI:
 
         edit_config_button = ttk.Button(config_frame, text="Edit Config", command=self.edit_config_file)
         edit_config_button.pack(side=tk.RIGHT, padx=5, pady=5)
+
+        # Base Coordinates Frame
+        base_coord_frame = ttk.LabelFrame(self.left_content, text="Coordonnées de la Base")
+        base_coord_frame.pack(fill=tk.X, padx=5, pady=5)
+
+        # Add coordinate entries
+        self.base_lat_var = tk.StringVar()
+        self.base_lon_var = tk.StringVar()
+        self.base_height_var = tk.StringVar()
+
+        # Latitude
+        ttk.Label(base_coord_frame, text="Latitude (deg):").grid(row=0, column=0, padx=5, pady=2, sticky='e')
+        ttk.Entry(base_coord_frame, textvariable=self.base_lat_var).grid(row=0, column=1, padx=5, pady=2, sticky='ew')
+
+        # Longitude
+        ttk.Label(base_coord_frame, text="Longitude (deg):").grid(row=1, column=0, padx=5, pady=2, sticky='e')
+        ttk.Entry(base_coord_frame, textvariable=self.base_lon_var).grid(row=1, column=1, padx=5, pady=2, sticky='ew')
+
+        # Height
+        ttk.Label(base_coord_frame, text="Hauteur (m):").grid(row=2, column=0, padx=5, pady=2, sticky='e')
+        ttk.Entry(base_coord_frame, textvariable=self.base_height_var).grid(row=2, column=1, padx=5, pady=2, sticky='ew')
+
+        # Add Apply button
+        ttk.Button(base_coord_frame, text="Appliquer", command=self.apply_base_coordinates).grid(row=3, column=0, columnspan=2, pady=5)
 
         # Antenna Configuration Frame
         antenna_frame = ttk.LabelFrame(self.left_content, text="Configuration Antenne")
@@ -551,6 +598,50 @@ class PPKProcessorGUI:
         self.progress_bar = ttk.Progressbar(run_frame, orient='horizontal', mode='determinate', variable=self.progress_var)
         self.progress_bar.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5, pady=5)
 
+    def apply_base_coordinates(self, show_messages=True):
+        """Apply base coordinates to the config file"""
+        try:
+            # Validate inputs
+            lat = float(self.base_lat_var.get())
+            lon = float(self.base_lon_var.get())
+            height = float(self.base_height_var.get())
+
+            # Read current config file
+            config_path = self.config_path_var.get()
+            if not config_path:
+                if show_messages:
+                    messagebox.showerror("Erreur", "Veuillez d'abord sélectionner un fichier de configuration.")
+                return
+
+            with open(config_path, 'r') as f:
+                config_lines = f.readlines()
+
+            # Update coordinates in config
+            for i, line in enumerate(config_lines):
+                if line.startswith('ant2-postype'):
+                    config_lines[i] = 'ant2-postype       =llh        # (0:llh,1:xyz,2:single,3:posfile,4:rinexhead,5:rtcm)\n'
+                elif line.startswith('ant2-pos1'):
+                    config_lines[i] = f'ant2-pos1          ={lat}  # (deg|m)\n'
+                elif line.startswith('ant2-pos2'):
+                    config_lines[i] = f'ant2-pos2          ={lon}  # (deg|m)\n'
+                elif line.startswith('ant2-pos3'):
+                    config_lines[i] = f'ant2-pos3          ={height}  # (m|m)\n'
+
+            # Write updated config
+            with open(config_path, 'w') as f:
+                f.writelines(config_lines)
+
+            self.append_log(f"Coordonnées de base mises à jour: Lat={lat}, Lon={lon}, H={height}\n")
+            if show_messages:
+                messagebox.showinfo("Succès", "Coordonnées de base mises à jour avec succès.")
+
+        except ValueError:
+            if show_messages:
+                messagebox.showerror("Erreur", "Veuillez entrer des coordonnées valides (nombres décimaux).")
+        except Exception as e:
+            if show_messages:
+                messagebox.showerror("Erreur", f"Erreur lors de la mise à jour des coordonnées: {str(e)}")
+
     def create_right_frame(self):
         """Create right frame with logs and quality statistics"""
         notebook = ttk.Notebook(self.right_frame)
@@ -560,8 +651,17 @@ class PPKProcessorGUI:
         log_tab = ttk.Frame(notebook)
         notebook.add(log_tab, text='Status and Logs')
 
-        self.log_text = scrolledtext.ScrolledText(log_tab, state='disabled')
-        self.log_text.pack(fill=tk.BOTH, expand=True)
+        # Create a container frame for logs and button
+        log_container = ttk.Frame(log_tab)
+        log_container.pack(fill=tk.BOTH, expand=True)
+
+        # Add Clear Logs button at the top
+        clear_logs_btn = ttk.Button(log_container, text="Clear Logs", command=self.clear_logs)
+        clear_logs_btn.pack(side=tk.TOP, pady=(5,0), padx=5)
+
+        # Add the log text widget
+        self.log_text = scrolledtext.ScrolledText(log_container, state='disabled')
+        self.log_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         # Statistics Tab
         stats_tab = ttk.Frame(notebook)
@@ -1147,6 +1247,19 @@ class PPKProcessorGUI:
         self.base_height_entry = ttk.Entry(antheight_frame, textvariable=self.config_settings['pos2-antheight'])
         self.base_height_entry.grid(row=2, column=1, sticky="ew", padx=5, pady=2)
 
+        # Manual offset entry (row 1)
+        ttk.Label(antheight_frame, text="Offset manuel (m):").grid(row=1, column=2, padx=5, pady=5)
+        self.manual_offset_entry = ttk.Entry(
+            antenna_frame,
+            textvariable=self.manual_offset,
+            width=10
+        )
+        self.manual_offset_entry.grid(row=1, column=3, padx=5, pady=5)
+
+        # Bind events
+        self.antenna_combo.bind('<<ComboboxSelected>>', self.update_total_offset)
+        self.manual_offset_entry.bind('<KeyRelease>', self.update_total_offset)
+
     def update_antenna_height(self, *args):
         try:
             # Get the current and previous antenna selections
@@ -1411,7 +1524,6 @@ class PPKProcessorGUI:
         }
         with open(self.CONFIG_FILE, 'w') as f:
             json.dump(config, f)
-
 
 def main():
     root = tk.Tk()
