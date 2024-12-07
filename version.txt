@@ -1,0 +1,6 @@
+VSFileVersion=1.1.0.0 
+FileDescription=PPK Batch Processor 
+LegalCopyright=© 2024 Votre Entreprise 
+CompanyName=Votre Entreprise 
+ProductName=PPK Batch Processor 
+ProductVersion=1.1.0.0 
