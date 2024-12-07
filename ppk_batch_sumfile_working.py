@@ -9,7 +9,6 @@ import datetime
 import shutil
 import json
 import os
-import csv
 
 
 class RoverObservation:
@@ -108,8 +107,8 @@ class PPKProcessorGUI:
 
         # Initialize antenna variables
         self.antenna_types = {
-            "EMLID RS2": -0.135,  # Offset de -0.135m pour EMLID RS2
-            "FOIF A30": -0.088    # Offset de -0.088m pour FOIF A30
+            "EMLID RS2": -0.135,
+            "FOIF A30": -0.088
         }
         
         self.selected_antenna = tk.StringVar(value=list(self.antenna_types.keys())[0])
@@ -306,12 +305,11 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
                 'height': self.base_height_var.get()
             }
             
-            # Get antenna settings
-            antenna_settings = {
-                'selected_antenna': self.selected_antenna.get(),
-                'manual_offset': self.manual_offset.get(),
-                'total_offset': self.total_offset.get()
-            }
+            # Debug log pour vérifier les coordonnées
+            self.append_log(f"Saving base coordinates: {base_coords}\n")
+            
+            # Get log content
+            log_content = self.log_text.get(1.0, tk.END).strip()
             
             # Build project data
             project_data = {
@@ -320,11 +318,10 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
                 'rover_files': [str(rover.filepath) for rover in self.rover_obs_list],
                 'base_files': [str(base.filepath) for base in self.base_obs_list],
                 'nav_files': [str(nav.filepath) for nav in self.nav_obs_list],
-                'sum_files': [str(sum_file) for sum_file in self.sum_files],
+                'sum_files': [str(sum_file) for sum_file in self.sum_files],  # Ajout des fichiers .sum
                 'config_settings': {k: str(v.get()) for k, v in self.config_settings.items()},
-                'base_coordinates': base_coords,
-                'antenna_settings': antenna_settings,  # Ajout des paramètres d'antenne
-                'logs': self.log_text.get(1.0, tk.END).strip(),
+                'base_coordinates': base_coords,  # Ajout des coordonnées ici
+                'logs': log_content,
                 'statistics': [
                     {
                         'file': str(self.stats_tree.item(item)['values'][0]),
@@ -335,6 +332,7 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
                 ]
             }
 
+            # Save with explicit encoding
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(project_data, f, indent=4, ensure_ascii=False)
             
@@ -392,12 +390,7 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
                     date_display = rover.date if rover.date else "Unknown"
                     time_display = rover.time if rover.time else "Unknown"
                     display_name = f"{rover.filepath.name} (Date: {date_display}, Time: {time_display})"
-                    
                     self.rover_listbox.insert(tk.END, display_name)
-                    self.rover_listbox.see(tk.END)
-                    self.master.update_idletasks()
-                    
-                    self.append_log(f"Successfully added rover file: {display_name}\n")
                 else:
                     self.append_log(f"Warning: Rover file not found: {rover_path}\n")
 
@@ -460,16 +453,6 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
                     self.sum_files_listbox.insert(tk.END, Path(sum_path).name)
                 else:
                     self.append_log(f"Fichier .sum introuvable: {sum_path}\n")
-
-            # Restaurer les paramètres d'antenne
-            if 'antenna_settings' in project_data:
-                antenna_settings = project_data['antenna_settings']
-                self.selected_antenna.set(antenna_settings.get('selected_antenna', list(self.antenna_types.keys())[0]))
-                self.manual_offset.set(antenna_settings.get('manual_offset', '0.0'))
-                self.total_offset.set(antenna_settings.get('total_offset', str(self.antenna_types[self.selected_antenna.get()])))
-                
-                # Mettre à jour l'offset d'antenne
-                self.update_total_offset()
 
             self.append_log(f"Project loaded from {file_path}\n")
 
@@ -624,7 +607,25 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
         antenna_frame = ttk.LabelFrame(self.left_content, text="Configuration Antenne")
         antenna_frame.pack(fill=tk.X, padx=5, pady=5)
 
-        self.create_antenna_section(antenna_frame)
+        # Type d'antenne
+        ttk.Label(antenna_frame, text="Type d'antenne:").grid(row=0, column=0, padx=5, pady=2, sticky='e')
+        self.antenna_type_var = tk.StringVar(value="EMLID RS2")
+        antenna_type_combo = ttk.Combobox(antenna_frame, textvariable=self.antenna_type_var, values=["EMLID RS2"])
+        antenna_type_combo.grid(row=0, column=1, columnspan=2, padx=5, pady=2, sticky='w')
+
+        # Offset total
+        ttk.Label(antenna_frame, text="Offset total (m):").grid(row=1, column=0, padx=5, pady=2, sticky='e')
+        self.antenna_offset_var = tk.StringVar(value="-0.135")
+        ttk.Entry(antenna_frame, textvariable=self.antenna_offset_var, width=20).grid(row=1, column=1, padx=5, pady=2, sticky='w')
+
+        # Offset manuel
+        ttk.Label(antenna_frame, text="Offset manuel (m):").grid(row=2, column=0, padx=5, pady=2, sticky='e')
+        self.manual_offset_var = tk.StringVar(value="-0.00")
+        ttk.Entry(antenna_frame, textvariable=self.manual_offset_var, width=20).grid(row=2, column=1, padx=5, pady=2, sticky='w')
+
+        # Bouton Appliquer Configuration Antenne
+        ttk.Button(antenna_frame, text="Appliquer Configuration Antenne", 
+                  command=self.apply_antenna_config).grid(row=3, column=0, columnspan=3, pady=5)
 
         # Rover Files Selection
         rover_frame = ttk.LabelFrame(self.left_content, text="Select Rover Files")
@@ -717,58 +718,6 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
         self.progress_bar = ttk.Progressbar(run_frame, orient='horizontal', mode='determinate', variable=self.progress_var)
         self.progress_bar.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5, pady=5)
 
-    def create_antenna_section(self, antenna_frame):
-        """Crée la section de configuration d'antenne"""
-        # Type d'antenne (menu déroulant)
-        ttk.Label(antenna_frame, text="Type d'antenne:").grid(row=0, column=0, padx=5, pady=2, sticky='e')
-        antenna_combo = ttk.Combobox(
-            antenna_frame,
-            textvariable=self.selected_antenna,
-            values=list(self.antenna_types.keys()),
-            state="readonly"
-        )
-        antenna_combo.grid(row=0, column=1, columnspan=2, padx=5, pady=2, sticky='w')
-        antenna_combo.bind('<<ComboboxSelected>>', self.update_total_offset)
-
-        # Offset antenne (lecture seule)
-        ttk.Label(antenna_frame, text="Offset antenne (m):").grid(row=1, column=0, padx=5, pady=2, sticky='e')
-        self.antenna_offset_var = tk.StringVar(value=str(self.antenna_types[self.selected_antenna.get()]))
-        # Utiliser 'readonly' au lieu de 'normal' pour l'entrée de l'offset antenne
-        self.antenna_offset_entry = ttk.Entry(
-            antenna_frame,
-            textvariable=self.antenna_offset_var,
-            state='readonly',  # Ceci rend le champ non modifiable mais visible
-            width=20
-        )
-        self.antenna_offset_entry.grid(row=1, column=1, padx=5, pady=2, sticky='w')
-
-        # Offset manuel
-        ttk.Label(antenna_frame, text="Offset manuel (m):").grid(row=2, column=0, padx=5, pady=2, sticky='e')
-        manual_offset_entry = ttk.Entry(
-            antenna_frame,
-            textvariable=self.manual_offset,
-            width=20
-        )
-        manual_offset_entry.grid(row=2, column=1, padx=5, pady=2, sticky='w')
-        manual_offset_entry.bind('<KeyRelease>', self.update_total_offset)
-
-        # Offset total (lecture seule)
-        ttk.Label(antenna_frame, text="Offset total (m):").grid(row=3, column=0, padx=5, pady=2, sticky='e')
-        total_offset_entry = ttk.Entry(
-            antenna_frame,
-            textvariable=self.total_offset,
-            state='readonly',
-            width=20
-        )
-        total_offset_entry.grid(row=3, column=1, padx=5, pady=2, sticky='w')
-
-        # Bouton Appliquer
-        ttk.Button(
-            antenna_frame,
-            text="Appliquer Configuration Antenne",
-            command=self.apply_antenna_config
-        ).grid(row=4, column=0, columnspan=2, pady=10)
-
     def apply_base_coordinates(self, show_messages=True):
         """Apply base coordinates to the config file"""
         try:
@@ -824,21 +773,13 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
         log_tab = ttk.Frame(notebook)
         notebook.add(log_tab, text='Status and Logs')
 
-        # Create a container frame for logs and buttons
+        # Create a container frame for logs and button
         log_container = ttk.Frame(log_tab)
         log_container.pack(fill=tk.BOTH, expand=True)
 
-        # Create button frame for log controls
-        log_buttons_frame = ttk.Frame(log_container)
-        log_buttons_frame.pack(side=tk.TOP, fill=tk.X, pady=(5,0), padx=5)
-
-        # Add Clear Logs button
-        clear_logs_btn = ttk.Button(log_buttons_frame, text="Clear Logs", command=self.clear_logs)
-        clear_logs_btn.pack(side=tk.LEFT, padx=5)
-
-        # Add Export Logs button
-        export_logs_btn = ttk.Button(log_buttons_frame, text="Export Logs", command=self.export_logs)
-        export_logs_btn.pack(side=tk.LEFT, padx=5)
+        # Add Clear Logs button at the top
+        clear_logs_btn = ttk.Button(log_container, text="Clear Logs", command=self.clear_logs)
+        clear_logs_btn.pack(side=tk.TOP, pady=(5,0), padx=5)
 
         # Add the log text widget
         self.log_text = scrolledtext.ScrolledText(log_container, state='disabled')
@@ -856,7 +797,7 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
         button_frame = ttk.Frame(stats_frame)
         button_frame.pack(fill=tk.X, padx=5, pady=5)
 
-        # Add Delete Selected button
+        # Add Delete Selected button only
         self.delete_stat_btn = ttk.Button(
             button_frame,
             text="Delete Selected",
@@ -864,16 +805,8 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
         )
         self.delete_stat_btn.pack(side=tk.LEFT, padx=5)
 
-        # Add Export Statistics button
-        export_stats_btn = ttk.Button(
-            button_frame,
-            text="Export Statistics",
-            command=self.export_statistics
-        )
-        export_stats_btn.pack(side=tk.LEFT, padx=5)
-
         # Create Treeview with quality columns
-        columns = ('File', 'fix (%)', 'float (%)', 'sbas (%)', 'dgps (%)', 'single (%)')
+        columns = ('File', 'q1 (%)', 'q2 (%)', 'q3 (%)', 'q4 (%)', 'q5 (%)')
         self.stats_tree = ttk.Treeview(stats_frame, columns=columns, show='headings')
         
         # Configure columns
@@ -890,11 +823,8 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
         self.stats_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        # Bind double-click
+        # Bind double-click to open file
         self.stats_tree.bind('<Double-1>', self.on_tree_double_click)
-        
-        # Track latest file
-        self.latest_pos_file = None
 
     def delete_selected_statistics(self):
         """Delete selected entries from statistics tree"""
@@ -1447,31 +1377,19 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
             return False
 
     def export_logs(self):
-        """Exporte les logs dans un fichier texte"""
         logs = self.log_text.get(1.0, tk.END).strip()
         if not logs:
-            messagebox.showwarning("Pas de logs", "Aucun log à exporter.")
+            messagebox.showwarning("No Logs", "No logs available to export.")
             return
 
-        # Obtenir la date et l'heure actuelles pour le nom de fichier par défaut
-        default_filename = f"ppk_logs_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-        
-        export_path = filedialog.asksaveasfilename(
-            defaultextension=".txt",
-            filetypes=[("Fichiers texte", "*.txt"), ("Tous les fichiers", "*.*")],
-            initialfile=default_filename
-        )
-        
+        export_path = filedialog.asksaveasfilename(defaultextension=".txt", filetypes=[("Text Files", "*.txt")])
         if export_path:
             try:
                 with open(export_path, 'w', encoding='utf-8') as f:
                     f.write(logs)
-                self.append_log(f"Logs exportés vers: {export_path}\n")
-                messagebox.showinfo("Export réussi", f"Les logs ont été exportés vers:\n{export_path}")
+                messagebox.showinfo("Export Successful", f"Logs exported to {export_path}.")
             except Exception as e:
-                error_msg = f"Erreur lors de l'export des logs:\n{str(e)}"
-                self.append_log(f"{error_msg}\n")
-                messagebox.showerror("Erreur d'export", error_msg)
+                messagebox.showerror("Export Failed", f"An error occurred while exporting logs:\n{str(e)}")
 
     def update_file_lists(self):
         """Update all file listboxes with current file lists"""
@@ -1498,6 +1416,123 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
             time_display = nav.time if nav.time else "Unknown"
             display_name = f"{nav.filepath.name} (Date: {date_display}, Time: {time_display})"
             self.nav_listbox.insert(tk.END, display_name)
+
+    def create_antenna_section(self, antheight_frame):
+        # Antenna type dropdown
+        ttk.Label(antheight_frame, text="Antenna Type:").grid(row=0, column=0, sticky="e", padx=5, pady=2)
+        antenna_dropdown = ttk.Combobox(antheight_frame, 
+                                      textvariable=self.selected_antenna,
+                                      values=list(self.antenna_types.keys()),
+                                      state="readonly")
+        antenna_dropdown.grid(row=0, column=1, columnspan=2, sticky="ew", padx=5, pady=5)
+
+        # Rover antenna height entry
+        ttk.Label(antheight_frame, text="Rover Antenna Height (pos1-antheight):").grid(row=1, column=0, sticky="e", padx=5, pady=2)
+        self.rover_height_entry = ttk.Entry(antheight_frame, textvariable=self.config_settings['pos1-antheight'])
+        self.rover_height_entry.grid(row=1, column=1, sticky="ew", padx=5, pady=2)
+
+        # Base antenna height entry
+        ttk.Label(antheight_frame, text="Base Antenna Height (pos2-antheight):").grid(row=2, column=0, sticky="e", padx=5, pady=2)
+        self.base_height_entry = ttk.Entry(antheight_frame, textvariable=self.config_settings['pos2-antheight'])
+        self.base_height_entry.grid(row=2, column=1, sticky="ew", padx=5, pady=2)
+
+        # Manual offset entry (row 1)
+        ttk.Label(antheight_frame, text="Offset manuel (m):").grid(row=1, column=2, padx=5, pady=5)
+        self.manual_offset_entry = ttk.Entry(
+            antenna_frame,
+            textvariable=self.manual_offset,
+            width=10
+        )
+        self.manual_offset_entry.grid(row=1, column=3, padx=5, pady=5)
+
+        # Bind events
+        self.antenna_combo.bind('<<ComboboxSelected>>', self.update_total_offset)
+        self.manual_offset_entry.bind('<KeyRelease>', self.update_total_offset)
+
+    def update_antenna_height(self, *args):
+        try:
+            # Get the current and previous antenna selections
+            new_antenna = self.selected_antenna.get()
+            current_height = float(self.config_settings['pos1-antheight'].get() or 0)
+            
+            # If changing from one antenna to another, first remove the old offset
+            if hasattr(self, '_previous_antenna') and self._previous_antenna != "Select Antenna...":
+                current_height += abs(self.antenna_types[self._previous_antenna])
+                
+            # Apply new offset
+            new_offset = self.antenna_types[new_antenna]
+            adjusted_height = current_height + new_offset if new_antenna != "Select Antenna..." else current_height
+            
+            # Update height value
+            self.config_settings['pos1-antheight'].set(f"{adjusted_height:.3f}")
+            
+            # Store current antenna as previous for next change
+            self._previous_antenna = new_antenna
+            
+            self.append_log(f"Antenna height adjusted for {new_antenna}: {new_offset:+.3f}m\n")
+        except ValueError:
+            self.append_log("Please enter a valid antenna height first\n")
+
+    def ant1_antdelu(self):
+        # Implementation of the antenna height calculation
+        return 0.0  # Default value when no antenna is selected
+
+    def update_total_height(self, event=None):
+        """Update the total antenna height based on antenna type and additional height"""
+        try:
+            # Get antenna offset from selected antenna type
+            antenna_type = self.selected_antenna.get()
+            antenna_offset = self.antenna_types.get(antenna_type, 0.0)
+            
+            # Get additional height value
+            try:
+                additional_height = float(self.config_settings['pos1-antheight'].get())
+            except ValueError:
+                additional_height = 0.0
+                
+            # Calculate total height
+            total_height = antenna_offset + additional_height
+            
+            # Update the height values
+            self.config_settings['pos1-antheight'].set(f"{total_height:.4f}")
+            self.config_settings['pos2-antheight'].set(f"{total_height:.4f}")
+            
+            # If we have a total height display label, update it
+            if hasattr(self, 'total_height_value'):
+                self.total_height_value.config(text=f"{total_height:.4f}")
+                
+        except Exception as e:
+            print(f"Error updating total height: {e}")
+            # Set default values if calculation fails
+            self.config_settings['pos1-antheight'].set("0.0000")
+            self.config_settings['pos2-antheight'].set("0.0000")
+            if hasattr(self, 'total_height_value'):
+                self.total_height_value.config(text="0.0000")
+
+    def update_total_offset(self, *args):
+        """Calculate and update the antenna offset for ant1-antdelu"""
+        try:
+            # Get antenna offset
+            antenna_offset = self.antenna_types[self.selected_antenna.get()]
+            manual_offset = float(self.manual_offset.get() or 0.0)
+            total = antenna_offset + manual_offset
+            
+            # Update displays and config
+            self.total_offset.set(f"{total:.3f}")
+            self.config_settings['ant1-antdelu'].set(f"{total:.3f}")  # Update ant1-antdelu
+            
+        except (ValueError, KeyError):
+            self.total_offset.set("Error")
+            self.config_settings['ant1-antdelu'].set("0.000")
+
+    def view_pos_file(self, pos_file_path):
+        """Open .pos file with default system viewer"""
+        try:
+            os.startfile(pos_file_path)  # Windows specific
+            self.append_log(f"Opening result file: {pos_file_path}\n")
+        except Exception as e:
+            self.append_log(f"Error opening file: {str(e)}\n")
+            messagebox.showerror("Error", f"Failed to open file: {pos_file_path}\n{str(e)}")
 
     def on_tree_double_click(self, event):
         """Handle double click on statistics tree item"""
@@ -1819,41 +1854,45 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
             raise ValueError(f"Erreur lors de la mise à jour du fichier de configuration: {str(e)}")
 
     def apply_antenna_config(self):
-        """Applique la configuration de l'antenne au fichier de configuration"""
+        """Applique la configuration de l'antenne."""
         try:
-            config_path = self.config_path_var.get()
-            if not config_path:
+            # Utiliser config_path_var au lieu de config_file_var
+            config_file = self.config_path_var.get()
+            if not config_file:
                 raise ValueError("Aucun fichier de configuration sélectionné")
 
-            # Récupérer l'offset total calculé
-            total_offset = float(self.total_offset.get())
+            # Récupérer l'offset
+            offset = self.antenna_offset_var.get()
+            if not offset:
+                offset = "0"
 
             # Lire le fichier de configuration
-            with open(config_path, 'r') as f:
+            with open(config_file, 'r') as f:
                 lines = f.readlines()
 
             # Mettre à jour la configuration
             updated_lines = []
             for line in lines:
                 if line.startswith('ant1-antdelu'):
-                    updated_lines.append(f'ant1-antdelu       ={total_offset:.3f}          # (m)\n')
+                    updated_lines.append(f'ant1-antdelu       ={offset}          # (m)\n')
                 elif line.startswith('ant2-antdelu'):
-                    updated_lines.append(f'ant2-antdelu       ={total_offset:.3f}          # (m)\n')
+                    updated_lines.append(f'ant2-antdelu       ={offset}          # (m)\n')
                 else:
                     updated_lines.append(line)
 
             # Écrire le fichier mis à jour
-            with open(config_path, 'w') as f:
+            with open(config_file, 'w') as f:
                 f.writelines(updated_lines)
 
-            self.append_log(f"Configuration antenne mise à jour:\n")
-            self.append_log(f"Offset total appliqué: {total_offset:.3f} m\n")
+            self.append_log(f"\nConfiguration antenne mise à jour:\n")
+            self.append_log(f"Offset vertical: {offset} m\n")
+
+            # Afficher un message de confirmation
             messagebox.showinfo("Succès", "Configuration de l'antenne mise à jour avec succès")
 
         except Exception as e:
-            error_msg = f"Erreur lors de l'application de la configuration antenne: {str(e)}"
-            self.append_log(f"{error_msg}\n")
-            messagebox.showerror("Erreur", error_msg)
+            self.append_log(f"Erreur lors de l'application de la configuration antenne: {str(e)}\n")
+            messagebox.showerror("Erreur", str(e))
 
         self.unsaved_changes = True
 
@@ -1995,77 +2034,6 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
 
     def on_entry_change(self, *args):
         self.unsaved_changes = True
-
-    def update_total_offset(self, *args):
-        """Calcule et met à jour l'offset total"""
-        try:
-            # Récupérer l'offset de l'antenne sélectionnée
-            antenna_type = self.selected_antenna.get()
-            antenna_offset = self.antenna_types[antenna_type]
-            
-            # Mettre à jour l'affichage de l'offset d'antenne
-            self.antenna_offset_var.set(f"{antenna_offset:.3f}")
-            
-            # Calculer l'offset total
-            manual_offset = float(self.manual_offset.get() or 0.0)
-            total = antenna_offset + manual_offset
-            
-            # Mettre à jour l'affichage et la configuration
-            self.total_offset.set(f"{total:.3f}")
-            self.config_settings['ant1-antdelu'].set(f"{total:.3f}")
-            
-        except (ValueError, KeyError) as e:
-            self.total_offset.set("Erreur")
-            self.config_settings['ant1-antdelu'].set("0.000")
-
-    def view_pos_file(self, pos_file_path):
-        """Open .pos file with default system viewer"""
-        try:
-            os.startfile(pos_file_path)  # Windows specific
-            self.append_log(f"Opening result file: {pos_file_path}\n")
-        except Exception as e:
-            self.append_log(f"Error opening file: {str(e)}\n")
-            messagebox.showerror("Error", f"Failed to open file: {pos_file_path}\n{str(e)}")
-
-    def export_statistics(self):
-        """Exporte les statistiques dans un fichier CSV"""
-        if not self.stats_tree.get_children():
-            messagebox.showwarning("Pas de statistiques", "Aucune statistique à exporter.")
-            return
-
-        # Obtenir la date et l'heure actuelles pour le nom de fichier par défaut
-        default_filename = f"ppk_statistics_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-        
-        export_path = filedialog.asksaveasfilename(
-            defaultextension=".csv",
-            filetypes=[("Fichiers CSV", "*.csv"), ("Tous les fichiers", "*.*")],
-            initialfile=default_filename
-        )
-        
-        if export_path:
-            try:
-                # Récupérer les en-têtes
-                headers = [self.stats_tree.heading(col)['text'] for col in self.stats_tree['columns']]
-                
-                # Récupérer les données
-                data = []
-                for item in self.stats_tree.get_children():
-                    values = self.stats_tree.item(item)['values']
-                    data.append(values)
-                
-                # Écrire dans le fichier CSV
-                with open(export_path, 'w', newline='', encoding='utf-8') as f:
-                    writer = csv.writer(f)
-                    writer.writerow(headers)
-                    writer.writerows(data)
-                
-                self.append_log(f"Statistiques exportées vers: {export_path}\n")
-                messagebox.showinfo("Export réussi", f"Les statistiques ont été exportées vers:\n{export_path}")
-                
-            except Exception as e:
-                error_msg = f"Erreur lors de l'export des statistiques:\n{str(e)}"
-                self.append_log(f"{error_msg}\n")
-                messagebox.showerror("Erreur d'export", error_msg)
 
 def main():
     root = tk.Tk()
