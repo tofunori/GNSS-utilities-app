@@ -10,6 +10,8 @@ import shutil
 import json
 import os
 import csv
+import ctypes
+from tools import GNSSViewer, PosToExcelConverter, DMSConverter, R27Converter, dms_to_dd
 
 
 class RoverObservation:
@@ -153,6 +155,14 @@ class PPKProcessorGUI:
         file_menu.add_command(label="Save As...", command=self.save_project_as)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.master.quit)
+
+        # Tools Menu (déplacé ici, entre File et Help)
+        tools_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Tools", menu=tools_menu)
+        tools_menu.add_command(label="GNSS Data Viewer", command=self.open_gnss_viewer)
+        tools_menu.add_command(label="POS to Excel Converter", command=self.open_pos_converter)
+        tools_menu.add_command(label="DMS Converter", command=self.open_dms_converter)
+        tools_menu.add_command(label="F16 to R27 Converter", command=self.open_r27_converter)
 
         # Help Menu
         help_menu = tk.Menu(menubar, tearoff=0)
@@ -1239,6 +1249,9 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
                 self.append_log(f"Erreur lors de la mise à jour des coordonnées manuelles : {str(e)}\n")
                 return
 
+        # Définir CREATE_NO_WINDOW pour Windows
+        CREATE_NO_WINDOW = 0x08000000
+
         for rover in self.rover_obs_list:
             if not rover.date:
                 self.append_log(f"No date found for rover file '{rover.filepath.name}'. Skipping.\n")
@@ -1324,7 +1337,14 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
             self.append_log(f"Executing: {' '.join(command)}\n")
 
             try:
-                process = subprocess.run(command, capture_output=True, text=True)
+                # Utiliser CREATE_NO_WINDOW pour masquer la fenêtre de commande
+                process = subprocess.run(
+                    command, 
+                    capture_output=True, 
+                    text=True,
+                    creationflags=CREATE_NO_WINDOW if os.name == 'nt' else 0
+                )
+                
                 if process.returncode == 0:
                     self.append_log(f"Processing completed for Rover: {rover.filepath.name}\n")
                     # Compute statistics and update treeview immediately
@@ -2066,6 +2086,44 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
                 error_msg = f"Erreur lors de l'export des statistiques:\n{str(e)}"
                 self.append_log(f"{error_msg}\n")
                 messagebox.showerror("Erreur d'export", error_msg)
+
+    def open_gnss_viewer(self):
+        gnss_window = tk.Toplevel(self.master)
+        gnss_window.title("GNSS Data Viewer")
+        gnss_window.geometry("800x1000")  # Taille initiale
+        gnss_window.minsize(800, 800)    # Taille minimale
+        gnss_window.maxsize(1920, 1900)   # Taille maximale
+        
+        # Permettre à la fenêtre GNSS Data Viewer de rester au premier plan
+        self.master.attributes('-topmost', False)  # Désactiver topmost pour la fenêtre principale
+        gnss_window.attributes('-topmost', True)   # Activer topmost pour GNSS Viewer
+        gnss_window.focus_force()  # Donner le focus à GNSS Viewer
+        
+        GNSSViewer(gnss_window)
+
+    def open_pos_converter(self):
+        converter_window = tk.Toplevel(self.master)
+        converter_window.title("POS to Excel Converter")
+        converter_window.transient(self.master)
+        converter_window.focus_set()
+        converter_window.grab_set()
+        PosToExcelConverter(converter_window)
+
+    def open_dms_converter(self):
+        converter_window = tk.Toplevel(self.master)
+        converter_window.title("DMS Converter")
+        converter_window.transient(self.master)
+        converter_window.focus_set()
+        converter_window.grab_set()
+        DMSConverter(converter_window)
+
+    def open_r27_converter(self):
+        converter_window = tk.Toplevel(self.master)
+        converter_window.title("F16 to R27 Converter")
+        converter_window.transient(self.master)
+        converter_window.focus_set()
+        converter_window.grab_set()
+        R27Converter(converter_window)
 
 def main():
     root = tk.Tk()
