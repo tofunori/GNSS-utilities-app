@@ -7,12 +7,21 @@ if exist "Output" rmdir /s /q Output
 echo Installation des dépendances...
 pip install pyinstaller
 
+echo Vérification de l'icône...
+if not exist "assets\icon.ico" (
+    echo ERREUR: L'icône n'existe pas dans assets\icon.ico
+    pause
+    exit /b 1
+)
+
 echo Construction de l'application...
 pyinstaller --clean ^
     --windowed ^
     --name "PPK_Batch_Processor" ^
     --add-data "tools.py;." ^
     --add-data "Drone_GNSS_app_v1.3.py;." ^
+    --add-data "assets/*;assets/" ^
+    --icon="assets\icon.ico" ^
     "PPK batch processor.py"
 
 echo Vérification des fichiers générés...

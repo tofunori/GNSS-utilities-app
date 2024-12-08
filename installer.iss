@@ -16,10 +16,12 @@ AppUpdatesURL=https://votre-site.com/updates
 VersionInfoCompany=Votre Entreprise
 VersionInfoCopyright=© 2024 Votre Entreprise
 VersionInfoDescription=PPK Batch Processor Installation
+SetupIconFile=assets\icon.ico
 
 [Files]
 Source: "dist\PPK_Batch_Processor\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
 Source: "README.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "assets\icon.ico"; DestDir: "{app}\assets"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\PPK Batch Processor"; Filename: "{app}\PPK_Batch_Processor.exe"

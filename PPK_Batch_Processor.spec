@@ -5,7 +5,7 @@ a = Analysis(
     ['PPK batch processor.py'],
     pathex=[],
     binaries=[],
-    datas=[('tools.py', '.'), ('Drone_GNSS_app_v1.3.py', '.')],
+    datas=[('tools.py', '.'), ('Drone_GNSS_app_v1.3.py', '.'), ('assets/*', 'assets/')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -32,6 +32,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=['assets\\icon.ico'],
 )
 coll = COLLECT(
     exe,
