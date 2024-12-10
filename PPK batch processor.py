@@ -110,14 +110,14 @@ class PPKProcessorGUI:
 
         # Initialize antenna variables
         self.antenna_types = {
-            "N/A": 0.0,
-            "EMLID RS2": 0.0,
+            "Select a antenna model": 0.0,
+            "EMLID RS2": -0.135,
             "FOIF A30": -0.088
         }
         
-        self.selected_antenna = tk.StringVar(value=list(self.antenna_types.keys())[0])  # N/A sera la valeur par défaut
-        self.manual_offset = tk.StringVar(value="-0.045")  # Changé de "0.00" à "-0.045"
-        self.total_offset = tk.StringVar(value="-0.045")   # Mise à jour de la valeur initiale
+        self.selected_antenna = tk.StringVar(value=list(self.antenna_types.keys())[0])
+        self.manual_offset = tk.StringVar(value="-0.045")
+        self.total_offset = tk.StringVar(value="-0.045")
 
         # Create UI elements
         self.create_menu()
@@ -264,26 +264,26 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
         diagram_window.geometry("600x400")
         
         # Le diagramme en texte
-        diagram = """BASE - APC
-│
-├── EMLID RS2 (Base)
-│     └── Mesuré en ARP
-│          └── Offset : +0.136m (pour convertir en APC)
-│
-└── FOIFA30 (Base)
-      └── Mesuré directement en APC (aucun offset)
-
-ROVER - ARP
-│
-├── EMLID RS2 (Rover)
-│     └── Mesuré en ARP
-│          └── Offset : +0.136m (pour convertir en APC)
-│               └── Soustraire la hauteur de l'antenne (ruban: -0.045)
-│
-└── FOIFA30 (Rover)
-      └── Mesuré directement en APC
-           └── Offset : -0.088m (pour convertir en ARP)
-                └── Soustraire la hauteur de l'antenne (ruban: -0.045)"""
+        diagram = """
+          +----------------------+
+          |   BASE - APC         |
+          +----------------------+
+                  |
+  +---------------------+   +---------------------+
+  |   EMLID RS2 (Base)  |   |   FOIFA30 (Base)    |
+  | Coordonnées en ARP  |   | Coordonnées en APC  |
+  | + Offset: +0.136 m  |   | Aucun offset requis |
+  +---------------------+   +---------------------+
+                  |
+       ----------------------------
+       |                          |
++---------------------+   +---------------------+
+|   EMLID RS2 (Rover) |   |   FOIFA30 (Rover)  |
+| Coordonnées en APC  |   | Coordonnées en APC |
+| - Offset: -0.136 m  |   | - Offset: -0.088 m |
+| - Hauteur antenne:  |   | - Hauteur antenne: |
+| -0.045 m            |   | -0.045 m           |
++---------------------+   +---------------------+"""
         
         text = scrolledtext.ScrolledText(diagram_window, wrap=tk.NONE, font=("Courier", 10))
         text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -378,7 +378,7 @@ ROVER - ARP
                 'sum_files': [str(sum_file) for sum_file in self.sum_files],
                 'config_settings': {k: str(v.get()) for k, v in self.config_settings.items()},
                 'base_coordinates': base_coords,
-                'antenna_settings': antenna_settings,  # Ajout des paramètres d'antenne
+                'antenna_settings': antenna_settings,
                 'logs': self.log_text.get(1.0, tk.END).strip(),
                 'statistics': [
                     {
@@ -525,6 +525,9 @@ ROVER - ARP
                 
                 # Mettre à jour l'offset d'antenne
                 self.update_total_offset()
+                
+                # Appliquer automatiquement la configuration d'antenne
+                self.apply_antenna_config()
 
             self.append_log(f"Project loaded from {file_path}\n")
 
@@ -574,7 +577,7 @@ ROVER - ARP
 
     def create_left_content(self):
         # RTKLIB Executable Selection
-        exec_frame = ttk.LabelFrame(self.left_content, text="RTKLIB Executable")
+        exec_frame = ttk.LabelFrame(self.left_content, text="Rtklib executable")
         exec_frame.pack(fill=tk.X, padx=5, pady=5)
 
         self.exec_path_var = tk.StringVar()
@@ -585,7 +588,7 @@ ROVER - ARP
         exec_browse.pack(side=tk.RIGHT, padx=5, pady=5)
 
         # Config File Selection
-        config_frame = ttk.LabelFrame(self.left_content, text="Config File (ppk.conf)")
+        config_frame = ttk.LabelFrame(self.left_content, text="Config file (ppk.conf)")
         config_frame.pack(fill=tk.X, padx=5, pady=5)
 
         self.config_path_var = tk.StringVar()
@@ -599,7 +602,7 @@ ROVER - ARP
         edit_config_button.pack(side=tk.RIGHT, padx=5, pady=5)
 
         # Base Coordinates Frame
-        base_coord_frame = ttk.LabelFrame(self.left_content, text="Coordonnées de la Base")
+        base_coord_frame = ttk.LabelFrame(self.left_content, text="Base coordinates (APC)")
         base_coord_frame.pack(fill=tk.X, padx=5, pady=5)
 
         # Mode selection
@@ -676,13 +679,13 @@ ROVER - ARP
         self.update_coord_mode()
 
         # Antenna Configuration Frame
-        antenna_frame = ttk.LabelFrame(self.left_content, text="Configuration Antenne")
+        antenna_frame = ttk.LabelFrame(self.left_content, text="Rover antenna height")
         antenna_frame.pack(fill=tk.X, padx=5, pady=5)
 
         self.create_antenna_section(antenna_frame)
 
         # Rover Files Selection
-        rover_frame = ttk.LabelFrame(self.left_content, text="Select Rover Files")
+        rover_frame = ttk.LabelFrame(self.left_content, text="Select rover files")
         rover_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         add_rover_delete_frame = ttk.Frame(rover_frame)
@@ -706,7 +709,7 @@ ROVER - ARP
         rover_scroll.config(command=self.rover_listbox.yview)
 
         # Base Files Selection
-        base_frame = ttk.LabelFrame(self.left_content, text="Select Base Files")
+        base_frame = ttk.LabelFrame(self.left_content, text="Select base files")
         base_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         add_base_delete_frame = ttk.Frame(base_frame)
@@ -730,7 +733,7 @@ ROVER - ARP
         base_scroll.config(command=self.base_listbox.yview)
 
         # Navigation Files Selection
-        nav_frame = ttk.LabelFrame(self.left_content, text="Select Navigation Files")
+        nav_frame = ttk.LabelFrame(self.left_content, text="Select navigation files")
         nav_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         add_nav_delete_frame = ttk.Frame(nav_frame)
@@ -754,7 +757,7 @@ ROVER - ARP
         nav_scroll.config(command=self.nav_listbox.yview)
 
         # Output Directory Selection
-        output_frame = ttk.LabelFrame(self.left_content, text="Output Directory")
+        output_frame = ttk.LabelFrame(self.left_content, text="Output directory")
         output_frame.pack(fill=tk.X, padx=5, pady=5)
 
         self.output_path_var = tk.StringVar()
@@ -774,8 +777,12 @@ ROVER - ARP
 
     def create_antenna_section(self, antenna_frame):
         """Crée la section de configuration d'antenne"""
+        # Modifier le titre du LabelFrame
+        antenna_frame = ttk.LabelFrame(self.left_content, text="Rover antenna height")
+        antenna_frame.pack(fill=tk.X, padx=5, pady=5)
+
         # Type d'antenne (menu déroulant)
-        ttk.Label(antenna_frame, text="Type d'antenne:").grid(row=0, column=0, padx=5, pady=2, sticky='e')
+        ttk.Label(antenna_frame, text="Antenna type:").grid(row=0, column=0, padx=5, pady=2, sticky='e')
         antenna_combo = ttk.Combobox(
             antenna_frame,
             textvariable=self.selected_antenna,
@@ -786,19 +793,18 @@ ROVER - ARP
         antenna_combo.bind('<<ComboboxSelected>>', self.update_total_offset)
 
         # Offset antenne (lecture seule)
-        ttk.Label(antenna_frame, text="Offset antenne (m):").grid(row=1, column=0, padx=5, pady=2, sticky='e')
+        ttk.Label(antenna_frame, text="Antenna offset (m):").grid(row=1, column=0, padx=5, pady=2, sticky='e')
         self.antenna_offset_var = tk.StringVar(value=str(self.antenna_types[self.selected_antenna.get()]))
-        # Utiliser 'readonly' au lieu de 'normal' pour l'entrée de l'offset antenne
         self.antenna_offset_entry = ttk.Entry(
             antenna_frame,
             textvariable=self.antenna_offset_var,
-            state='readonly',  # Ceci rend le champ non modifiable mais visible
+            state='readonly',
             width=20
         )
         self.antenna_offset_entry.grid(row=1, column=1, padx=5, pady=2, sticky='w')
 
         # Offset manuel
-        ttk.Label(antenna_frame, text="Offset manuel (m):").grid(row=2, column=0, padx=5, pady=2, sticky='e')
+        ttk.Label(antenna_frame, text="Manual offset (m):").grid(row=2, column=0, padx=5, pady=2, sticky='e')
         manual_offset_entry = ttk.Entry(
             antenna_frame,
             textvariable=self.manual_offset,
@@ -808,7 +814,7 @@ ROVER - ARP
         manual_offset_entry.bind('<KeyRelease>', self.update_total_offset)
 
         # Offset total (lecture seule)
-        ttk.Label(antenna_frame, text="Offset total (m):").grid(row=3, column=0, padx=5, pady=2, sticky='e')
+        ttk.Label(antenna_frame, text="Total offset (m):").grid(row=3, column=0, padx=5, pady=2, sticky='e')
         total_offset_entry = ttk.Entry(
             antenna_frame,
             textvariable=self.total_offset,
@@ -816,13 +822,6 @@ ROVER - ARP
             width=20
         )
         total_offset_entry.grid(row=3, column=1, padx=5, pady=2, sticky='w')
-
-        # Bouton Appliquer
-        ttk.Button(
-            antenna_frame,
-            text="Appliquer Configuration Antenne",
-            command=self.apply_antenna_config
-        ).grid(row=4, column=0, columnspan=2, pady=10)
 
     def apply_base_coordinates(self, show_messages=True):
         """Apply base coordinates to the config file"""
@@ -1883,7 +1882,7 @@ ROVER - ARP
         except Exception as e:
             raise ValueError(f"Erreur lors de la mise à jour du fichier de configuration: {str(e)}")
 
-    def apply_antenna_config(self):
+    def apply_antenna_config(self, show_message=True):
         """Applique la configuration de l'antenne au fichier de configuration"""
         try:
             config_path = self.config_path_var.get()
@@ -1912,12 +1911,15 @@ ROVER - ARP
 
             self.append_log(f"Configuration antenne mise à jour:\n")
             self.append_log(f"Offset rover (ant1) appliqué: {total_offset:.3f} m\n")
-            messagebox.showinfo("Succès", "Configuration de l'antenne mise à jour avec succès")
+            
+            if show_message:
+                messagebox.showinfo("Succès", "Configuration de l'antenne mise à jour avec succès")
 
         except Exception as e:
             error_msg = f"Erreur lors de l'application de la configuration antenne: {str(e)}"
             self.append_log(f"{error_msg}\n")
-            messagebox.showerror("Erreur", error_msg)
+            if show_message:
+                messagebox.showerror("Erreur", error_msg)
 
         self.unsaved_changes = True
 
@@ -2061,34 +2063,36 @@ ROVER - ARP
         self.unsaved_changes = True
 
     def update_total_offset(self, *args):
-        """Calcule et met à jour l'offset total"""
+        """Calcule et met à jour l'offset total et applique automatiquement la configuration"""
         try:
             # Si N/A est sélectionné, mettre tous les offsets à 0 sauf l'offset manuel
-            if self.selected_antenna.get() == "N/A":
+            if self.selected_antenna.get() == "Select a antenna model":
                 self.antenna_offset_var.set("0.000")
                 if not self.manual_offset.get():  # Si l'offset manuel est vide
                     self.manual_offset.set("-0.045")
                 total = float(self.manual_offset.get())
                 self.total_offset.set(f"{total:.3f}")
                 self.config_settings['ant1-antdelu'].set(f"{total:.3f}")
-                return
+            else:
+                # Calcul normal des offsets
+                antenna_type = self.selected_antenna.get()
+                antenna_offset = self.antenna_types[antenna_type]
+                
+                self.antenna_offset_var.set(f"{antenna_offset:.3f}")
+                
+                # S'assurer que l'offset manuel est défini
+                if not self.manual_offset.get():
+                    self.manual_offset.set("-0.045")
+                
+                manual_offset = float(self.manual_offset.get())
+                total = antenna_offset + manual_offset
+                
+                self.total_offset.set(f"{total:.3f}")
+                self.config_settings['ant1-antdelu'].set(f"{total:.3f}")
             
-            # Sinon, calcul normal des offsets
-            antenna_type = self.selected_antenna.get()
-            antenna_offset = self.antenna_types[antenna_type]
-            
-            self.antenna_offset_var.set(f"{antenna_offset:.3f}")
-            
-            # S'assurer que l'offset manuel est défini
-            if not self.manual_offset.get():
-                self.manual_offset.set("-0.045")
-            
-            manual_offset = float(self.manual_offset.get())
-            total = antenna_offset + manual_offset
-            
-            self.total_offset.set(f"{total:.3f}")
-            self.config_settings['ant1-antdelu'].set(f"{total:.3f}")
-            
+            # Appliquer automatiquement la configuration
+            self.apply_antenna_config(show_message=False)
+                
         except (ValueError, KeyError) as e:
             self.total_offset.set("Erreur")
             self.config_settings['ant1-antdelu'].set("-0.045")

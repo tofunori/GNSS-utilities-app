@@ -15,6 +15,14 @@ class GNSSViewer:
         self.window = window
         self.setup_ui()
 
+        # Ajouter une variable pour tracker si l'élévation a été modifiée manuellement
+        self.elevation_manually_set = False
+        # Stocker l'élévation originale
+        self.original_elevation = None
+        
+        # Ajouter un flag pour le chargement initial
+        self.initial_load = True
+
     def setup_ui(self):
         """Configure l'interface utilisateur"""
         # Configuration de la fenêtre principale
@@ -228,9 +236,10 @@ class GNSSViewer:
         for i, field in enumerate(self.fields):
             ttk.Label(form_frame, text=field).grid(row=i, column=0, padx=5, pady=5)
             if field == "GNSS Model":
-                entry = ttk.Combobox(form_frame, values=["N/A", "EMLID INREACH RS2", "FOIF A30"], state="readonly")
-                entry.set("N/A")
+                entry = ttk.Combobox(form_frame, values=["Select a antenna model", "EMLID INREACH RS2", "FOIF A30"], state="readonly")
+                entry.set("Select a antenna model")
                 entry.bind('<<ComboboxSelected>>', self.on_gnss_model_change)
+                self.gnss_model_var = entry  # Stocker la référence au combobox
             elif field == "Description of Occupation":
                 entry = ttk.Combobox(form_frame, values=["Base", "Rover"], state="readonly")
                 entry.set("Base")
@@ -245,6 +254,10 @@ class GNSSViewer:
             elif field == "Datum":
                 entry = ttk.Entry(form_frame, width=30)
                 entry.insert(0, "ITRF20")
+            elif field == "Elevation (m)":
+                entry = ttk.Entry(form_frame, width=30)
+                entry.bind('<KeyRelease>', self.on_elevation_manual_edit)
+                self.elevation_var = entry  # Stocker la référence à l'entrée d'élévation
             else:
                 entry = ttk.Entry(form_frame, width=30)
             entry.grid(row=i, column=1, padx=5, pady=5)
@@ -294,46 +307,46 @@ class GNSSViewer:
 
     def on_gnss_model_change(self, event):
         """Gère le changement de modèle GNSS"""
-        selected_model = self.field_entries["GNSS Model"].get()
-        occupation_type = self.field_entries["Description of Occupation"].get()
-        current_elevation = self.field_entries["Elevation (m)"].get()
+        if self.initial_load:
+            self.initial_load = False
+            return
+            
+        if not self.elevation_manually_set:
+            # Appliquer l'offset seulement si l'élévation n'a pas été modifiée manuellement
+            self.apply_antenna_offset()
         
+    def apply_antenna_offset(self):
+        """Appliquer l'offset d'antenne"""
         try:
-            # Stocker l'élévation originale si elle n'existe pas déjà
-            if not hasattr(self, 'original_elevation') and current_elevation:
-                self.original_elevation = float(current_elevation)
-            elif not current_elevation:
+            if self.original_elevation is None:
                 return
+                
+            current_model = self.gnss_model_var.get()
+            current_occupation = self.field_entries["Description of Occupation"].get()
             
-            if selected_model == "EMLID INREACH RS2":
-                if occupation_type == "Base":
-                    # Pour Base: APC avec offset
-                    self.field_entries["Reference Point"].set("APC")
-                    if hasattr(self, 'original_elevation'):
-                        offset = 0.136
-                        adjusted_elevation = self.original_elevation + offset
-                        self.field_entries["Elevation (m)"].delete(0, tk.END)
-                        self.field_entries["Elevation (m)"].insert(0, f"{adjusted_elevation:.6f}")
+            # Calculer le nouvel offset
+            if current_model == "EMLID INREACH RS2":
+                if current_occupation == "Base":
+                    offset = 0.136
                 else:
-                    # Pour Rover: ARP sans offset
-                    self.field_entries["Reference Point"].set("ARP")
-                    if hasattr(self, 'original_elevation'):
-                        self.field_entries["Elevation (m)"].delete(0, tk.END)
-                        self.field_entries["Elevation (m)"].insert(0, f"{self.original_elevation:.6f}")
+                    offset = -0.136
+            elif current_model == "FOIF A30":
+                if current_occupation == "Base":
+                    offset = 0.0
+                else:
+                    offset = -0.088
+            else:  # "Select a antenna model"
+                offset = 0.0
                 
-                self.field_entries["Reference Point"]["state"] = "disabled"
+            # Toujours partir de l'élévation originale pour le calcul
+            adjusted_elevation = self.original_elevation + offset
             
-            else:  # Pour N/A ou autres modèles
-                # Restaurer l'élévation originale
-                if hasattr(self, 'original_elevation'):
-                    self.field_entries["Elevation (m)"].delete(0, tk.END)
-                    self.field_entries["Elevation (m)"].insert(0, f"{self.original_elevation:.6f}")
-                
-                self.field_entries["Reference Point"].set("APC")
-                self.field_entries["Reference Point"]["state"] = "disabled"
-
-        except ValueError:
-            pass
+            # Mettre à jour le champ d'élévation avec 3 décimales au lieu de 6
+            self.field_entries["Elevation (m)"].delete(0, tk.END)
+            self.field_entries["Elevation (m)"].insert(0, f"{adjusted_elevation:.3f}")
+            
+        except Exception as e:
+            print(f"Error in apply_antenna_offset: {str(e)}")
 
     def on_reference_point_change(self, event):
         """Gère le changement de point de référence"""
@@ -668,6 +681,15 @@ class GNSSViewer:
         """Gère le changement de type d'occupation"""
         # Déclencher le changement de modèle GNSS pour mettre à jour le point de référence
         self.on_gnss_model_change(None)
+
+    def on_elevation_manual_edit(self, event):
+        """Gère la modification manuelle de l'élévation"""
+        self.elevation_manually_set = True
+        # Mettre à jour l'élévation originale si modifiée manuellement
+        try:
+            self.original_elevation = float(self.field_entries["Elevation (m)"].get())
+        except ValueError:
+            pass
 
 
 class PosToExcelConverter:
