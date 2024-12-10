@@ -3,7 +3,7 @@ from cx_Freeze import setup, Executable
 
 # Dépendances
 build_exe_options = {
-    "packages": ["os", "numpy", "pandas", "tkinter", "PIL"],
+    "packages": ["os", "numpy", "pandas", "tkinter", "PIL", "pyarrow"],
     "excludes": [],
     "include_files": [
         "tools.py",
@@ -27,5 +27,10 @@ setup(
             shortcut_name="PPK Batch Processor",
             shortcut_dir="DesktopFolder"
         )
+    ],
+    install_requires=[
+        'pandas',
+        'pyarrow>=14.0.1',  # Spécifiez une version récente stable
+        # autres dépendances...
     ]
 ) 

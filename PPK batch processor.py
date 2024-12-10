@@ -13,6 +13,19 @@ import csv
 import ctypes
 from tools import GNSSViewer, PosToExcelConverter, DMSConverter, R27Converter, dms_to_dd
 
+# Au lieu de
+import pandas as pd
+
+# Configurez pandas pour utiliser le moteur par défaut au lieu de pyarrow
+pd.set_option('io.parquet.engine', 'fastparquet')
+
+# Utilisez
+try:
+    import pandas as pd
+    pd.options.mode.use_inf_as_na = True  # Configuration pandas sans pyarrow
+except ImportError as e:
+    print(f"Erreur lors de l'importation de pandas: {e}")
+
 
 class RoverObservation:
     def __init__(self, filepath):
