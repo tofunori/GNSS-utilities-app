@@ -13,18 +13,23 @@ import csv
 import ctypes
 from tools import GNSSViewer, PosToExcelConverter, DMSConverter, R27Converter, dms_to_dd
 
-# Au lieu de
-import pandas as pd
-
-# Configurez pandas pour utiliser le moteur par défaut au lieu de pyarrow
-pd.set_option('io.parquet.engine', 'fastparquet')
-
-# Utilisez
+# Importation des modules requis
 try:
     import pandas as pd
-    pd.options.mode.use_inf_as_na = True  # Configuration pandas sans pyarrow
+    import openpyxl
 except ImportError as e:
-    print(f"Erreur lors de l'importation de pandas: {e}")
+    def show_import_error():
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showerror(
+            "Erreur d'importation",
+            "Modules requis manquants. Veuillez installer les modules suivants:\n\n"
+            "pip install pandas openpyxl\n\n"
+            f"Erreur détaillée: {str(e)}"
+        )
+        root.destroy()
+    show_import_error()
+    raise SystemExit(1)
 
 
 class RoverObservation:
