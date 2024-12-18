@@ -1176,8 +1176,7 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
                     new_path = filedialog.asksaveasfilename(
                         defaultextension=".conf",
                         filetypes=[("Config Files", "*.conf"), ("All Files", "*.*")],
-                        initialfile=Path(config_path).name
-                    )  # Ajout de la parenthèse fermante ici
+                        initialfile=Path(config_path).name)  # Ajout de la parenthèse fermante
                     if new_path:
                         edited_content = text_widget.get(1.0, tk.END).strip()
                         with open(new_path, 'w') as f:
@@ -1370,24 +1369,46 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
             self.save_config()
 
     def start_batch_processing(self):
-        # Validate inputs
+        # Vérifications existantes...
         if not self.exec_path_var.get():
-            messagebox.showerror("Error", "Please select the RTKLIB executable.")
+            messagebox.showerror("Erreur", "Veuillez sélectionner l'exécutable RTKLIB.")
             return
         if not self.config_path_var.get():
-            messagebox.showerror("Error", "Please select the config file (ppk.conf).")
+            messagebox.showerror("Erreur", "Veuillez sélectionner le fichier de configuration (ppk.conf).")
             return
         if not self.rover_obs_list:
-            messagebox.showerror("Error", "Please add at least one rover observation file.")
+            messagebox.showerror("Erreur", "Veuillez ajouter au moins un fichier d'observation rover.")
             return
         if not self.base_obs_list:
-            messagebox.showerror("Error", "Please add at least one base observation file.")
+            messagebox.showerror("Erreur", "Veuillez ajouter au moins un fichier d'observation base.")
             return
         if not self.nav_obs_list:
-            messagebox.showerror("Error", "Please add at least one navigation file.")
+            messagebox.showerror("Erreur", "Veuillez ajouter au moins un fichier de navigation.")
             return
         if not self.output_path_var.get():
-            messagebox.showerror("Error", "Please select the output directory.")
+            messagebox.showerror("Erreur", "Veuillez sélectionner le répertoire de sortie.")
+            return
+
+        # Nouvelle vérification pour les coordonnées de base
+        if self.coord_mode.get() == "manual":
+            if not all([self.base_lat_var.get(), self.base_lon_var.get(), self.base_height_var.get()]):
+                messagebox.showerror("Erreur", 
+                    "En mode manuel, vous devez spécifier les coordonnées de la base (latitude, longitude et hauteur) "
+                    "avant de lancer le traitement.")
+                return
+            try:
+                float(self.base_lat_var.get())
+                float(self.base_lon_var.get())
+                float(self.base_height_var.get())
+            except ValueError:
+                messagebox.showerror("Erreur", 
+                    "Les coordonnées de base doivent être des nombres valides.\n"
+                    "Veuillez vérifier les valeurs entrées.")
+                return
+        elif self.coord_mode.get() == "auto" and not self.sum_files:
+            messagebox.showerror("Erreur", 
+                "En mode automatique, vous devez importer au moins un fichier .sum "
+                "avant de lancer le traitement.")
             return
 
         # Disable widgets during processing
@@ -2151,7 +2172,7 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
                 
                 # Vérifier la correspondance
                 matching_base = self.find_matching_base_file(sum_date)
-                status = "✓" if matching_base else "❌"
+                status = "✓" if matching_base else "��"
                 
                 # Créer le texte d'affichage
                 display_text = f"{status} {Path(sum_file_path).name} ({formatted_date})"
