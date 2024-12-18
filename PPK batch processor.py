@@ -166,6 +166,9 @@ class PPKProcessorGUI:
         self.master.geometry("1000x400")
         self.master.minsize(400, 800)
 
+        # Initialize exec_path_var before other initializations
+        self.exec_path_var = tk.StringVar()  # Ajout de cette ligne
+
         # Initialize lists first
         self.rover_obs_list = []
         self.base_obs_list = []
@@ -658,18 +661,7 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
         self.create_left_content()
 
     def create_left_content(self):
-        # RTKLIB Executable Selection
-        exec_frame = ttk.LabelFrame(self.left_content, text="Rtklib executable")
-        exec_frame.pack(fill=tk.X, padx=5, pady=5)
-
-        self.exec_path_var = tk.StringVar()
-        exec_entry = ttk.Entry(exec_frame, textvariable=self.exec_path_var)
-        exec_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5, pady=5)
-
-        exec_browse = ttk.Button(exec_frame, text="Browse", command=self.browse_executable)
-        exec_browse.pack(side=tk.RIGHT, padx=5, pady=5)
-
-        # Config File Selection
+        # Commencer directement avec la section Config File
         config_frame = ttk.LabelFrame(self.left_content, text="Config file (ppk.conf)")
         config_frame.pack(fill=tk.X, padx=5, pady=5)
 
