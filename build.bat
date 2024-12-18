@@ -7,9 +7,14 @@ if exist "Output" rmdir /s /q Output
 echo Installation des dépendances...
 pip install pyinstaller
 
-echo Vérification de l'icône...
-if not exist "assets\icon.ico" (
-    echo ERREUR: L'icône n'existe pas dans assets\icon.ico
+echo Vérification des fichiers RTKLIB...
+if not exist "rtklib\rnx2rtkp.exe" (
+    echo ERREUR: rnx2rtkp.exe n'existe pas dans le dossier rtklib
+    pause
+    exit /b 1
+)
+if not exist "rtklib\ppk.conf" (
+    echo ERREUR: ppk.conf n'existe pas dans le dossier rtklib
     pause
     exit /b 1
 )
@@ -21,6 +26,7 @@ pyinstaller --clean ^
     --add-data "tools.py;." ^
     --add-data "Drone_GNSS_app_v1.3.py;." ^
     --add-data "assets/*;assets/" ^
+    --add-data "rtklib/*;rtklib/" ^
     --icon="assets\icon.ico" ^
     "PPK batch processor.py"
 

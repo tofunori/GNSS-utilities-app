@@ -9,6 +9,7 @@ OutputBaseFilename=PPK_Batch_Processor_Setup
 Compression=lzma
 SolidCompression=yes
 PrivilegesRequired=admin
+PrivilegesRequiredOverridesAllowed=dialog
 AppPublisher=Votre Entreprise
 AppPublisherURL=https://votre-site.com
 AppSupportURL=https://votre-site.com/support
@@ -22,13 +23,16 @@ SetupIconFile=assets\icon.ico
 Source: "dist\PPK_Batch_Processor\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
 Source: "README.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "assets\icon.ico"; DestDir: "{app}\assets"; Flags: ignoreversion
+Source: "rtklib\rnx2rtkp.exe"; DestDir: "{app}\rtklib"; Flags: ignoreversion
+Source: "rtklib\ppk.conf"; DestDir: "{app}\rtklib"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\PPK Batch Processor"; Filename: "{app}\PPK_Batch_Processor.exe"
 Name: "{commondesktop}\PPK Batch Processor"; Filename: "{app}\PPK_Batch_Processor.exe"
 
 [Run]
-Filename: "{app}\PPK_Batch_Processor.exe"; Description: "Lancer PPK Batch Processor"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\PPK_Batch_Processor.exe"; Description: "Lancer PPK Batch Processor"; \
+    Flags: nowait postinstall skipifsilent runascurrentuser
 Filename: "notepad.exe"; Parameters: "{app}\README.txt"; Description: "Lire les instructions d'installation"; Flags: postinstall nowait skipifsilent
 
 [Languages]

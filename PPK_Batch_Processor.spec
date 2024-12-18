@@ -5,7 +5,7 @@ a = Analysis(
     ['PPK batch processor.py'],
     pathex=[],
     binaries=[],
-    datas=[('tools.py', '.'), ('Drone_GNSS_app_v1.3.py', '.'), ('assets/*', 'assets/')],
+    datas=[('tools.py', '.'), ('Drone_GNSS_app_v1.3.py', '.'), ('assets/*', 'assets/'), ('rtklib/*', 'rtklib/')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

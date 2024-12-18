@@ -844,8 +844,20 @@ class PosToExcelConverter:
         
         if file_path:
             try:
+                # Vérifier si openpyxl est installé
+                try:
+                    import openpyxl
+                except ImportError:
+                    messagebox.showerror(
+                        "Error",
+                        "Le module 'openpyxl' est requis pour sauvegarder en Excel.\n\n"
+                        "Veuillez l'installer avec la commande:\n"
+                        "pip install openpyxl"
+                    )
+                    return
+
                 df = pd.DataFrame(self.data_to_save)
-                df.to_excel(file_path, index=False)
+                df.to_excel(file_path, index=False, engine='openpyxl')
                 messagebox.showinfo("Success", f"Saved {len(self.data_to_save)} records to Excel!")
             except Exception as e:
                 messagebox.showerror("Error", f"Error saving to Excel: {str(e)}")

@@ -12,6 +12,7 @@ import os
 import csv
 import ctypes
 from tools import GNSSViewer, PosToExcelConverter, DMSConverter, R27Converter, dms_to_dd
+import sys
 
 # Importation des modules requis
 try:
@@ -41,16 +42,48 @@ class RoverObservation:
     def extract_date_time(self):
         try:
             with open(self.filepath, 'r') as f:
-                for line in f:
+                lines = f.readlines()
+                
+                # Chercher d'abord dans l'en-tête RINEX (format EMLID)
+                for i, line in enumerate(lines):
+                    if "TIME OF FIRST OBS" in line:
+                        try:
+                            parts = line.split()
+                            if len(parts) >= 6:
+                                year = parts[0].strip()
+                                month = parts[1].strip().zfill(2)
+                                day = parts[2].strip().zfill(2)
+                                hour = parts[3].strip().zfill(2)
+                                minute = parts[4].strip().zfill(2)
+                                second = parts[5].strip().split('.')[0].zfill(2)
+                                
+                                date_str = f"{year}{month}{day}"
+                                time_str = f"{hour}{minute}{second}"
+                                return date_str, time_str
+                        except Exception as e:
+                            print(f"Erreur lors de l'extraction de la date (en-tête): {str(e)}")
+                            continue
+
+                # Si pas trouvé dans l'en-tête, chercher dans les lignes de données
+                for line in lines:
                     if line.startswith('>'):
+                        # Format EMLID et FOIF A30
                         match = re.search(
-                            r'(\d{4})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2}\.\d+)',
+                            r'>\s*(\d{4})\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,2})',
                             line
                         )
                         if match:
-                            date_str = f"{match.group(1)}{match.group(2)}{match.group(3)}"
-                            time_str = f"{match.group(4)}{match.group(5)}{match.group(6).split('.')[0]}"
+                            year = match.group(1)
+                            month = match.group(2).zfill(2)
+                            day = match.group(3).zfill(2)
+                            hour = match.group(4).zfill(2)
+                            minute = match.group(5).zfill(2)
+                            second = match.group(6).zfill(2)
+                            
+                            date_str = f"{year}{month}{day}"
+                            time_str = f"{hour}{minute}{second}"
                             return date_str, time_str
+
             return None, None
         except Exception as e:
             print(f"Error reading file {self.filepath}: {e}")
@@ -67,13 +100,53 @@ class BaseObservation:
         try:
             with open(self.filepath, 'r') as f:
                 lines = f.readlines()
-                if len(lines) < 2:
-                    print(f"File '{self.filepath.name}' has less than 2 lines.")
-                    return None, None
-                line_2 = lines[1].strip()
-                match = re.search(r'(\d{8})\s+(\d{6})', line_2)
-                if match:
-                    return match.group(1), match.group(2)
+
+                # Première méthode : chercher dans l'en-tête RINEX (format EMLID)
+                for i, line in enumerate(lines):
+                    if "TIME OF FIRST OBS" in line:
+                        try:
+                            parts = line.split()
+                            if len(parts) >= 6:
+                                year = parts[0].strip()
+                                month = parts[1].strip().zfill(2)
+                                day = parts[2].strip().zfill(2)
+                                hour = parts[3].strip().zfill(2)
+                                minute = parts[4].strip().zfill(2)
+                                second = parts[5].strip().split('.')[0].zfill(2)
+                                
+                                date_str = f"{year}{month}{day}"
+                                time_str = f"{hour}{minute}{second}"
+                                return date_str, time_str
+                        except Exception as e:
+                            print(f"Erreur lors de l'extraction de la date (en-tête): {str(e)}")
+                            continue
+
+                # Deuxième méthode : format FOIF A30 (ligne 2)
+                if len(lines) >= 2:
+                    line_2 = lines[1].strip()
+                    match = re.search(r'(\d{8})\s+(\d{6})', line_2)
+                    if match:
+                        return match.group(1), match.group(2)
+
+                # Troisième méthode : chercher dans les lignes de données
+                for line in lines:
+                    if line.startswith('>'):
+                        match = re.search(
+                            r'>\s*(\d{4})\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,2})',
+                            line
+                        )
+                        if match:
+                            year = match.group(1)
+                            month = match.group(2).zfill(2)
+                            day = match.group(3).zfill(2)
+                            hour = match.group(4).zfill(2)
+                            minute = match.group(5).zfill(2)
+                            second = match.group(6).zfill(2)
+                            
+                            date_str = f"{year}{month}{day}"
+                            time_str = f"{hour}{minute}{second}"
+                            return date_str, time_str
+
             return None, None
         except Exception as e:
             print(f"Error reading file {self.filepath}: {e}")
@@ -81,7 +154,7 @@ class BaseObservation:
 
 
 class NavigationFile(BaseObservation):
-    pass
+    pass  # Hérite de BaseObservation
 
 
 class PPKProcessorGUI:
@@ -160,6 +233,43 @@ class PPKProcessorGUI:
 
         # Initialise la liste des fichiers .sum importés
         self.sum_files = []
+
+        # Ajouter après l'initialisation des variables
+        self.config_folder = os.path.join(os.getenv('APPDATA'), 'PPK_Batch_Processor')
+        os.makedirs(self.config_folder, exist_ok=True)
+        
+        self.auto_load_rtklib_files()
+
+    def auto_load_rtklib_files(self):
+        """Charge automatiquement les fichiers RTKLIB depuis le dossier d'installation"""
+        try:
+            # Obtenir le chemin du dossier d'installation
+            if getattr(sys, 'frozen', False):
+                application_path = os.path.dirname(sys.executable)
+            else:
+                application_path = os.path.dirname(os.path.abspath(__file__))
+            
+            # Chemins vers les fichiers RTKLIB
+            rtklib_exe = os.path.join(application_path, "rtklib", "rnx2rtkp.exe")
+            install_config = os.path.join(application_path, "rtklib", "ppk.conf")
+            user_config = os.path.join(self.config_folder, "ppk.conf")
+            
+            # Copier le fichier de configuration s'il n'existe pas déjà
+            if not os.path.exists(user_config) and os.path.exists(install_config):
+                shutil.copy2(install_config, user_config)
+            
+            # Vérifier si les fichiers existent
+            if os.path.exists(rtklib_exe):
+                self.exec_path_var.set(rtklib_exe)
+                self.append_log("RTKLIB executable chargé automatiquement\n")
+            
+            if os.path.exists(user_config):
+                self.config_path_var.set(user_config)
+                self.load_config_settings(user_config)
+                self.append_log("Fichier de configuration RTKLIB chargé automatiquement\n")
+                
+        except Exception as e:
+            self.append_log(f"Erreur lors du chargement automatique des fichiers RTKLIB: {str(e)}\n")
 
     def create_menu(self):
         menubar = tk.Menu(self.master)
@@ -393,7 +503,7 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
                 'rover_files': [str(rover.filepath) for rover in self.rover_obs_list],
                 'base_files': [str(base.filepath) for base in self.base_obs_list],
                 'nav_files': [str(nav.filepath) for nav in self.nav_obs_list],
-                'sum_files': [str(sum_file) for sum_file in self.sum_files],
+                'sum_files': self.sum_files,
                 'config_settings': {k: str(v.get()) for k, v in self.config_settings.items()},
                 'base_coordinates': base_coords,
                 'antenna_settings': antenna_settings,
@@ -408,6 +518,7 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
                 ]
             }
 
+            # Save with pretty printing
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(project_data, f, indent=4, ensure_ascii=False)
             
@@ -418,7 +529,6 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
             error_msg = f"Failed to save project: {str(e)}"
             self.append_log(f"Error: {error_msg}\n")
             messagebox.showerror("Error", error_msg)
-            raise  # Pour le débogage
 
     def open_project(self):
         file_path = filedialog.askopenfilename(
@@ -434,30 +544,19 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
             # Set the current project path
             self.current_project_path = file_path
 
-            # Load project data
+            # Load basic settings
             self.exec_path_var.set(project_data['executable_path'])
             self.config_path_var.set(project_data['config_path'])
-            
-            # Charger les coordonnées de base silencieusement
-            if 'base_coordinates' in project_data:
-                coords = project_data['base_coordinates']
-                self.base_lat_var.set(coords.get('latitude', ''))
-                self.base_lon_var.set(coords.get('longitude', ''))
-                self.base_height_var.set(coords.get('height', ''))
-                
-                # Appliquer les coordonnées au fichier de configuration silencieusement
-                if all(coords.values()):
-                    try:
-                        # Modification de apply_base_coordinates pour éviter les messages
-                        self.apply_base_coordinates(show_messages=False)
-                    except Exception as e:
-                        self.append_log(f"Error applying base coordinates: {str(e)}\n")
-            else:
-                self.append_log("No base coordinates found in project file\n")
+
+            # Clear existing lists
+            self.rover_obs_list.clear()
+            self.base_obs_list.clear()
+            self.nav_obs_list.clear()
+            self.rover_listbox.delete(0, tk.END)
+            self.base_listbox.delete(0, tk.END)
+            self.nav_listbox.delete(0, tk.END)
 
             # Load rover files
-            self.rover_obs_list.clear()  # Clear existing files first
-            self.rover_listbox.delete(0, tk.END)  # Clear the listbox
             for rover_path in project_data['rover_files']:
                 if os.path.exists(rover_path):
                     rover = RoverObservation(Path(rover_path))
@@ -465,18 +564,11 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
                     date_display = rover.date if rover.date else "Unknown"
                     time_display = rover.time if rover.time else "Unknown"
                     display_name = f"{rover.filepath.name} (Date: {date_display}, Time: {time_display})"
-                    
                     self.rover_listbox.insert(tk.END, display_name)
-                    self.rover_listbox.see(tk.END)
-                    self.master.update_idletasks()
-                    
-                    self.append_log(f"Successfully added rover file: {display_name}\n")
                 else:
                     self.append_log(f"Warning: Rover file not found: {rover_path}\n")
 
             # Load base files
-            self.base_obs_list.clear()  # Clear existing files first
-            self.base_listbox.delete(0, tk.END)  # Clear the listbox
             for base_path in project_data['base_files']:
                 if os.path.exists(base_path):
                     base = BaseObservation(Path(base_path))
@@ -489,65 +581,35 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
                     self.append_log(f"Warning: Base file not found: {base_path}\n")
 
             # Load navigation files
-            self.nav_obs_list.clear()  # Clear existing files first
-            self.nav_listbox.delete(0, tk.END)  # Clear the listbox
             for nav_path in project_data['nav_files']:
                 if os.path.exists(nav_path):
                     nav = NavigationFile(Path(nav_path))
                     self.nav_obs_list.append(nav)
-                    date_display = nav.date if nav.date else "Unknown"
-                    time_display = nav.time if nav.time else "Unknown"
-                    display_name = f"{nav.filepath.name} (Date: {date_display}, Time: {time_display})"
-                    self.nav_listbox.insert(tk.END, display_name)
+                    self.nav_listbox.insert(tk.END, nav.filepath.name)
                 else:
                     self.append_log(f"Warning: Navigation file not found: {nav_path}\n")
+
+            # Load other settings
+            if 'base_coordinates' in project_data:
+                coords = project_data['base_coordinates']
+                self.base_lat_var.set(coords.get('latitude', ''))
+                self.base_lon_var.set(coords.get('longitude', ''))
+                self.base_height_var.set(coords.get('height', ''))
 
             # Load config settings
             for key, value in project_data.get('config_settings', {}).items():
                 if key in self.config_settings:
                     self.config_settings[key].set(value)
 
-            # Restore logs
-            if 'logs' in project_data:
-                self.log_text.config(state='normal')
-                self.log_text.delete(1.0, tk.END)
-                self.log_text.insert(tk.END, project_data['logs'])
-                self.log_text.config(state='disabled')
-
-            # Restore statistics
-            self.stats_tree.delete(*self.stats_tree.get_children())  # Clear existing stats
-            if 'statistics' in project_data:
-                for stat in project_data['statistics']:
-                    self.stats_tree.insert('', tk.END, values=(
-                        stat['file'],
-                        stat['status'],
-                        stat['processing_time']
-                    ))
-
-            # Charger les fichiers .sum
-            self.sum_files.clear()
-            self.sum_files_listbox.delete(0, tk.END)
-            for sum_path in project_data.get('sum_files', []):
-                if os.path.exists(sum_path):
-                    self.sum_files.append(sum_path)
-                    self.sum_files_listbox.insert(tk.END, Path(sum_path).name)
-                else:
-                    self.append_log(f"Fichier .sum introuvable: {sum_path}\n")
-
-            # Restaurer les paramètres d'antenne
+            # Load antenna settings
             if 'antenna_settings' in project_data:
-                antenna_settings = project_data['antenna_settings']
-                self.selected_antenna.set(antenna_settings.get('selected_antenna', list(self.antenna_types.keys())[0]))
-                self.manual_offset.set(antenna_settings.get('manual_offset', '-0.045'))
-                self.total_offset.set(antenna_settings.get('total_offset', '-0.045'))
-                
-                # Mettre à jour l'offset d'antenne
-                self.update_total_offset()
-                
-                # Appliquer automatiquement la configuration d'antenne
-                self.apply_antenna_config()
+                settings = project_data['antenna_settings']
+                self.selected_antenna.set(settings.get('selected_antenna', list(self.antenna_types.keys())[0]))
+                self.manual_offset.set(settings.get('manual_offset', '-0.045'))
+                self.total_offset.set(settings.get('total_offset', '-0.045'))
 
             self.append_log(f"Project loaded from {file_path}\n")
+            self.unsaved_changes = False
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load project: {str(e)}")
@@ -575,7 +637,7 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
         
         # Add mouse wheel scrolling
         def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")  # Suppression de la parenthèse en trop
         
         canvas.bind_all("<MouseWheel>", _on_mousewheel)
 
@@ -1110,16 +1172,19 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
                 editor.destroy()
 
             def save_as():
-                new_path = filedialog.asksaveasfilename(
-                    defaultextension=".conf",
-                    filetypes=[("Config Files", "*.conf"), ("All Files", "*.*")],
-                    initialfile=Path(config_path).name
-                )
-                if new_path:
-                    edited_content = text_widget.get(1.0, tk.END).strip()
-                    with open(new_path, 'w') as f:
-                        f.write(edited_content)
-                    messagebox.showinfo("Success", f"File saved as: {new_path}")
+                try:
+                    new_path = filedialog.asksaveasfilename(
+                        defaultextension=".conf",
+                        filetypes=[("Config Files", "*.conf"), ("All Files", "*.*")],
+                        initialfile=Path(config_path).name
+                    )  # Ajout de la parenthèse fermante ici
+                    if new_path:
+                        edited_content = text_widget.get(1.0, tk.END).strip()
+                        with open(new_path, 'w') as f:
+                            f.write(edited_content)
+                        messagebox.showinfo("Success", f"File saved as: {new_path}")
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed to save file: {str(e)}")
 
             save_button = ttk.Button(button_frame, text="Save", command=save_changes)
             save_button.pack(side=tk.LEFT, padx=5)
@@ -1132,7 +1197,14 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
 
     def add_rover_files(self):
         self.append_log("Opening file dialog...\n")
-        paths = filedialog.askopenfilenames(title="Select Rover Observation Files", filetypes=[("Rover Files", "*.24o")])
+        paths = filedialog.askopenfilenames(
+            title="Select Rover Observation Files", 
+            filetypes=[
+                ("Rover Files", "*.??o"),  # Accepte n'importe quel préfixe de 2 chiffres
+                ("Rover Files", "*.??O"),  # Format majuscule
+                ("All Files", "*.*")
+            ]
+        )
         self.append_log(f"Selected paths: {paths}\n")
         
         if not paths:
@@ -1141,6 +1213,15 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
             
         for path in paths:
             try:
+                # Vérifier si le fichier suit le format attendu (YYo ou YYO)
+                if not re.match(r'.*\.\d{2}[oO]$', path):
+                    self.append_log(f"Warning: {path} n'est peut-être pas un fichier rover valide\n")
+                    if not messagebox.askyesno(
+                        "Format non standard", 
+                        f"Le fichier {Path(path).name} ne semble pas être un fichier rover standard.\nVoulez-vous quand même l'ajouter?"
+                    ):
+                        continue
+
                 self.append_log(f"Processing file: {path}\n")
                 if path not in [rover.filepath for rover in self.rover_obs_list]:
                     rover = RoverObservation(path)
@@ -1183,9 +1264,23 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
         """Ajoute des fichiers de base à la liste."""
         paths = filedialog.askopenfilenames(
             title="Select Base Observation Files",
-            filetypes=[("Base Files", "*.24O")]
+            filetypes=[
+                ("Base Files", "*.??O"),  # Accepte n'importe quel préfixe de 2 chiffres
+                ("Base Files", "*.??o"),  # Format minuscule
+                ("All Files", "*.*")
+            ]
         )
+        
         for path in paths:
+            # Vérifier si le fichier suit le format attendu (YYO ou YYo)
+            if not re.match(r'.*\.\d{2}[oO]$', path):
+                self.append_log(f"Warning: {path} n'est peut-être pas un fichier de base valide\n")
+                if not messagebox.askyesno(
+                    "Format non standard", 
+                    f"Le fichier {Path(path).name} ne semble pas être un fichier de base standard.\nVoulez-vous quand même l'ajouter?"
+                ):
+                    continue
+
             if path not in [base.filepath for base in self.base_obs_list]:
                 base = BaseObservation(path)
                 self.base_obs_list.append(base)
@@ -1221,15 +1316,34 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
         self.unsaved_changes = True
 
     def add_nav_files(self):
-        paths = filedialog.askopenfilenames(title="Select Navigation Files", filetypes=[("Navigation Files", "*.24P")])
+        paths = filedialog.askopenfilenames(
+            title="Select Navigation Files", 
+            filetypes=[
+                ("Navigation Files", "*.??P"),  # Accepte n'importe quel préfixe de 2 chiffres
+                ("Navigation Files", "*.??p"),  # Pour les extensions en minuscules
+                ("Navigation Files", "*.??n"),  # Format alternatif
+                ("Navigation Files", "*.??N"),  # Format alternatif en majuscules
+                ("All Files", "*.*")
+            ]
+        )
+        
         for path in paths:
+            # Vérifier si le fichier suit le format attendu (YYP, YYp, YYn, YYN)
+            if not re.match(r'.*\.\d{2}[PpNn]$', path):
+                self.append_log(f"Warning: {path} n'est peut-être pas un fichier de navigation valide\n")
+                if not messagebox.askyesno(
+                    "Format non standard", 
+                    f"Le fichier {Path(path).name} ne semble pas être un fichier de navigation standard.\nVoulez-vous quand même l'ajouter?"
+                ):
+                    continue
+
             if path not in [nav.filepath for nav in self.nav_obs_list]:
                 nav = NavigationFile(path)
                 self.nav_obs_list.append(nav)
-                date_display = nav.date if nav.date else "Unknown"
-                time_display = nav.time if nav.time else "Unknown"
-                display_name = f"{nav.filepath.name} (Date: {date_display}, Time: {time_display})"
+                # Afficher uniquement le nom du fichier
+                display_name = nav.filepath.name
                 self.nav_listbox.insert(tk.END, display_name)
+                self.append_log(f"Fichier de navigation ajouté: {nav.filepath.name}\n")
 
         self.unsaved_changes = True
 
@@ -1335,6 +1449,23 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
 
             base_file = matching_bases[0]
 
+            # Nouvelle logique simplifiée pour trouver le fichier de navigation correspondant
+            matching_nav = None
+            base_name_pattern = re.search(r'\d{6}|\d{8}', base_file.filepath.stem)
+            
+            if base_name_pattern:
+                base_number = base_name_pattern.group()
+                for nav in self.nav_obs_list:
+                    if base_number in nav.filepath.stem:
+                        matching_nav = nav
+                        break
+
+            if not matching_nav:
+                self.append_log(f"No matching navigation file found for base file '{base_file.filepath.name}'. Skipping rover file '{rover.filepath.name}'.\n")
+                processed_rovers += 1
+                self.update_progress(processed_rovers, total_rovers)
+                continue
+
             # En mode auto seulement, mettre à jour les coordonnées depuis le fichier .sum
             if self.coord_mode.get() == "auto":
                 matching_sum = None
@@ -1365,17 +1496,6 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
                     except Exception as e:
                         self.append_log(f"Erreur lors de la mise à jour des coordonnées depuis {matching_sum}: {str(e)}\n")
 
-            nav_file = next(
-                (nav for nav in self.nav_obs_list if nav.date == base_file.date),
-                None
-            )
-
-            if not nav_file:
-                self.append_log(f"No matching navigation file found for base file '{base_file.filepath.name}' with date '{base_file.date}'. Skipping rover file '{rover.filepath.name}'.\n")
-                processed_rovers += 1
-                self.update_progress(processed_rovers, total_rovers)
-                continue
-
             # Simple file naming - just use rover name
             base_filename = f"{rover.name}.pos"
             output_pos = output_dir / base_filename
@@ -1394,7 +1514,7 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
                 "-o", str(output_pos),
                 str(rover.filepath),
                 str(base_file.filepath),
-                str(nav_file.filepath),
+                str(matching_nav.filepath),  # Correction ici : nav_file -> matching_nav
             ]
             self.append_log(f"Executing: {' '.join(command)}\n")
 
@@ -1764,60 +1884,42 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
     def import_sum_file(self):
         """Permet d'importer plusieurs fichiers .sum et de remplir les coordonnées de base."""
         sum_file_paths = filedialog.askopenfilenames(
-            title="Sélectionnez des fichiers .sum",
+            title="S��lectionnez des fichiers .sum",
             filetypes=[("Fichiers SUM", "*.sum"), ("Tous les fichiers", "*.*")]
         )
         
         if sum_file_paths:
             for sum_file_path in sum_file_paths:
-                # Vérifier si le fichier n'est pas déjà dans la liste
                 if sum_file_path not in self.sum_files:
                     try:
-                        # Utiliser la méthode pour analyser le fichier .sum
                         parsed_data = self.parse_sum_file(sum_file_path)
-
-                        # Extraire la date du nom du fichier .sum
                         sum_filename = Path(sum_file_path).stem
                         sum_date = self.extract_date_from_filename(sum_filename)
                         formatted_date = self.format_date(sum_date) if sum_date else "Date inconnue"
-
-                        # Vérifier la correspondance avec les fichiers de base
-                        matching_base = self.find_matching_base_file(sum_date)
-                        if matching_base:
-                            self.append_log(f"Fichier .sum {sum_filename} correspond au fichier de base {matching_base.name}\n")
-                            status = "✓"
-                        else:
-                            self.append_log(f"ATTENTION: Aucun fichier de base correspondant trouvé pour {sum_filename}\n")
-                            status = "❌"
-
-                        # Ajouter à la liste des fichiers .sum importés
-                        self.sum_files.append(sum_file_path)
                         
-                        # Afficher dans la Listbox avec plus d'informations
+                        matching_base = self.find_matching_base_file(sum_date)
+                        status = "✓" if matching_base else "❌"
+                        
+                        self.sum_files.append(sum_file_path)
                         display_text = f"{status} {Path(sum_file_path).name} ({formatted_date})"
                         if matching_base:
                             display_text += f" → {matching_base.name}"
                         
-                        # S'assurer que la Listbox est en état normal avant d'insérer
-                        self.sum_files_listbox.config(state='normal')
                         self.sum_files_listbox.insert(tk.END, display_text)
                         
-                        # Mettre à jour les coordonnées avec les données du dernier fichier importé
                         self.base_lat_var.set(parsed_data.get("Latitude (DD)", ""))
                         self.base_lon_var.set(parsed_data.get("Longitude (DD)", ""))
                         self.base_height_var.set(parsed_data.get("Elevation (m)", ""))
-
+                        
                         self.append_log(f"Coordonnées importées depuis: {sum_file_path}\n")
                     except Exception as e:
                         self.append_log(f"Impossible de lire le fichier .sum {sum_file_path}:\n{e}\n")
                         messagebox.showerror("Erreur", f"Impossible de lire le fichier .sum:\n{sum_file_path}\n{e}")
                 else:
                     self.append_log(f"Le fichier {Path(sum_file_path).name} est déjà importé\n")
-
-            # Forcer la mise à jour de l'affichage
-            self.sum_files_listbox.update()
-            self.master.update_idletasks()
-
+        
+        self.sum_files_listbox.update()
+        self.master.update_idletasks()
         self.unsaved_changes = True
 
     def find_matching_rover_file(self, sum_date):
@@ -2143,7 +2245,6 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
             try:
                 # Récupérer les en-têtes
                 headers = [self.stats_tree.heading(col)['text'] for col in self.stats_tree['columns']]
-                
                 # Récupérer les données
                 data = []
                 for item in self.stats_tree.get_children():
