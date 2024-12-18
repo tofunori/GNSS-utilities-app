@@ -283,6 +283,8 @@ class PPKProcessorGUI:
         file_menu.add_command(label="Save", command=self.save_project, accelerator="Ctrl+S")
         file_menu.add_command(label="Save As...", command=self.save_project_as)
         file_menu.add_separator()
+        file_menu.add_command(label="RTKLIB Path", command=self.show_rtklib_path)  # Nouvelle option
+        file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.master.quit)
 
         # Tools Menu (déplacé ici, entre File et Help)
@@ -2323,6 +2325,16 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
         converter_window.focus_set()
         converter_window.grab_set()
         R27Converter(converter_window)
+
+    def show_rtklib_path(self):
+        """Affiche l'emplacement de l'exécutable RTKLIB"""
+        rtklib_path = self.exec_path_var.get()
+        if rtklib_path and os.path.exists(rtklib_path):
+            messagebox.showinfo("RTKLIB Path", 
+                f"RTKLIB executable location:\n{rtklib_path}")
+        else:
+            messagebox.showerror("Error", 
+                "RTKLIB executable not found.\nPlease check the installation.")
 
 def main():
     root = tk.Tk()
