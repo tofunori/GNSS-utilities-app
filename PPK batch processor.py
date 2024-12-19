@@ -166,6 +166,16 @@ class PPKProcessorGUI:
         self.master.geometry("1000x400")
         self.master.minsize(400, 800)
 
+        # Créer le dossier de l'application dans AppData si nécessaire
+        self.app_data_dir = os.path.join(os.getenv('APPDATA'), 'PPK_Batch_Processor')
+        os.makedirs(self.app_data_dir, exist_ok=True)
+
+        # Initialize log file path dans AppData
+        self.log_file = os.path.join(self.app_data_dir, 'log.txt')
+        # Ajouter une nouvelle session au fichier log existant
+        with open(self.log_file, 'a', encoding='utf-8') as f:
+            f.write(f"\n{'='*50}\n=== Nouvelle session démarrée le {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===\n{'='*50}\n")
+
         # Initialize exec_path_var before other initializations
         self.exec_path_var = tk.StringVar()  # Ajout de cette ligne
 
@@ -205,13 +215,13 @@ class PPKProcessorGUI:
         # Initialize antenna variables
         self.antenna_types = {
             "Select a antenna model": 0.0,
-            "EMLID RS2": -0.135,
-            "FOIF A30": -0.088
+            "EMLID RS2": 0.135,  # Changé de -0.135 à 0.135
+            "FOIF A30": 0.088    # Changé de -0.088 à 0.088
         }
         
         self.selected_antenna = tk.StringVar(value=list(self.antenna_types.keys())[0])
-        self.manual_offset = tk.StringVar(value="-0.045")
-        self.total_offset = tk.StringVar(value="-0.045")
+        self.manual_offset = tk.StringVar(value="0.045")  # Changé de -0.045 à 0.045
+        self.total_offset = tk.StringVar(value="0.045")   # Changé de -0.045 à 0.045
 
         # Create UI elements
         self.create_menu()
@@ -359,12 +369,15 @@ Use the **Delete Selected** button in each section to remove unwanted files.
 - Press **Ctrl+S** to quickly save your current project if already named.
 
 **9. Logs & Exporting**  
-- Check the "Status and Logs" tab for detailed messages and any errors.  
-- Click **Clear Logs** to reset.  
-- Use the "Export Logs" feature (if available) to save logs to a `.txt` file for record-keeping.
+- Check the "Status and Logs" tab for detailed messages and any errors.
+- A permanent log file (`log.txt`) is maintained at:
+  `C:\\Users\\[YourUsername]\\AppData\\Roaming\\PPK_Batch_Processor\\log.txt`
+- This log file keeps a complete history of all sessions and operations.
+- Click **Clear Logs** to reset the display (this won't affect the log file).
+- Use the "Export Logs" feature to save current session logs to a separate file.
 
 **10. Help & Support**  
-- **User Manual:** Access the integrated manual via **Help > User Manual**.  
+- **User Manual:** Access this integrated manual via **Help > User Manual**.  
 - **Support:** Check **Help > Support** for contact and GitHub repository information.  
 - **About:** View version and author information from **Help > About**.
 
@@ -569,7 +582,12 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
                     date_display = rover.date if rover.date else "Unknown"
                     time_display = rover.time if rover.time else "Unknown"
                     display_name = f"{rover.filepath.name} (Date: {date_display}, Time: {time_display})"
+                    
                     self.rover_listbox.insert(tk.END, display_name)
+                    self.rover_listbox.see(tk.END)
+                    self.master.update_idletasks()
+                    
+                    self.append_log(f"Successfully added rover file: {display_name}\n")
                 else:
                     self.append_log(f"Warning: Rover file not found: {rover_path}\n")
 
@@ -582,39 +600,12 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
                     time_display = base.time if base.time else "Unknown"
                     display_name = f"{base.filepath.name} (Date: {date_display}, Time: {time_display})"
                     self.base_listbox.insert(tk.END, display_name)
-                else:
-                    self.append_log(f"Warning: Base file not found: {base_path}\n")
+                    self.append_log(f"Fichier de base ajouté: {base.filepath.name}\n")
+        
+            # Mettre à jour les correspondances des fichiers .sum
+            self.update_sum_files_display()
 
-            # Load navigation files
-            for nav_path in project_data['nav_files']:
-                if os.path.exists(nav_path):
-                    nav = NavigationFile(Path(nav_path))
-                    self.nav_obs_list.append(nav)
-                    self.nav_listbox.insert(tk.END, nav.filepath.name)
-                else:
-                    self.append_log(f"Warning: Navigation file not found: {nav_path}\n")
-
-            # Load other settings
-            if 'base_coordinates' in project_data:
-                coords = project_data['base_coordinates']
-                self.base_lat_var.set(coords.get('latitude', ''))
-                self.base_lon_var.set(coords.get('longitude', ''))
-                self.base_height_var.set(coords.get('height', ''))
-
-            # Load config settings
-            for key, value in project_data.get('config_settings', {}).items():
-                if key in self.config_settings:
-                    self.config_settings[key].set(value)
-
-            # Load antenna settings
-            if 'antenna_settings' in project_data:
-                settings = project_data['antenna_settings']
-                self.selected_antenna.set(settings.get('selected_antenna', list(self.antenna_types.keys())[0]))
-                self.manual_offset.set(settings.get('manual_offset', '-0.045'))
-                self.total_offset.set(settings.get('total_offset', '-0.045'))
-
-            self.append_log(f"Project loaded from {file_path}\n")
-            self.unsaved_changes = False
+            self.unsaved_changes = True
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load project: {str(e)}")
@@ -878,7 +869,7 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
         self.antenna_offset_entry.grid(row=1, column=1, padx=5, pady=2, sticky='w')
 
         # Offset manuel
-        ttk.Label(antenna_frame, text="Manual offset (m):").grid(row=2, column=0, padx=5, pady=2, sticky='e')
+        ttk.Label(antenna_frame, text="Antenna height (m):").grid(row=2, column=0, padx=5, pady=2, sticky='e')
         manual_offset_entry = ttk.Entry(
             antenna_frame,
             textvariable=self.manual_offset,
@@ -1321,7 +1312,7 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
         )
         
         for path in paths:
-            # Vérifier si le fichier suit le format attendu (YYP, YYp, YYn, YYN)
+            # V��rifier si le fichier suit le format attendu (YYP, YYp, YYn, YYN)
             if not re.match(r'.*\.\d{2}[PpNn]$', path):
                 self.append_log(f"Warning: {path} n'est peut-être pas un fichier de navigation valide\n")
                 if not messagebox.askyesno(
@@ -1607,11 +1598,22 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
                 self.latest_pos_file = os.path.join(self.output_path_var.get(), filename)
 
     def append_log(self, message):
+        """Ajoute un message au log visuel et au fichier log.txt"""
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        log_message = f"[{timestamp}] {message}"
+        
+        # Ajouter au widget de log visuel
         self.log_text.config(state='normal')
-        self.log_text.insert(tk.END, f"[{timestamp}] {message}")
+        self.log_text.insert(tk.END, log_message)
         self.log_text.see(tk.END)
         self.log_text.config(state='disabled')
+        
+        # Ajouter au fichier log.txt
+        try:
+            with open(self.log_file, 'a', encoding='utf-8') as f:
+                f.write(log_message)
+        except Exception as e:
+            print(f"Erreur d'écriture dans le fichier log: {str(e)}")
 
     def clear_logs(self):
         self.log_text.config(state='normal')
@@ -1899,7 +1901,7 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
     def import_sum_file(self):
         """Permet d'importer plusieurs fichiers .sum et de remplir les coordonnées de base."""
         sum_file_paths = filedialog.askopenfilenames(
-            title="S��lectionnez des fichiers .sum",
+            title="Slectionnez des fichiers .sum",
             filetypes=[("Fichiers SUM", "*.sum"), ("Tous les fichiers", "*.*")]
         )
         
@@ -2166,7 +2168,7 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
                 
                 # Vérifier la correspondance
                 matching_base = self.find_matching_base_file(sum_date)
-                status = "✓" if matching_base else "��"
+                status = "✓" if matching_base else ""
                 
                 # Créer le texte d'affichage
                 display_text = f"{status} {Path(sum_file_path).name} ({formatted_date})"
@@ -2204,7 +2206,7 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
             if self.selected_antenna.get() == "Select a antenna model":
                 self.antenna_offset_var.set("0.000")
                 if not self.manual_offset.get():  # Si l'offset manuel est vide
-                    self.manual_offset.set("-0.045")
+                    self.manual_offset.set("0.045")  # Changé de -0.045 à 0.045
                 total = float(self.manual_offset.get())
                 self.total_offset.set(f"{total:.3f}")
                 self.config_settings['ant1-antdelu'].set(f"{total:.3f}")
@@ -2217,7 +2219,7 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
                 
                 # S'assurer que l'offset manuel est défini
                 if not self.manual_offset.get():
-                    self.manual_offset.set("-0.045")
+                    self.manual_offset.set("0.045")  # Changé de -0.045 à 0.045
                 
                 manual_offset = float(self.manual_offset.get())
                 total = antenna_offset + manual_offset
@@ -2230,7 +2232,7 @@ Follow these steps to prepare and run batch PPK data processing efficiently with
                 
         except (ValueError, KeyError) as e:
             self.total_offset.set("Erreur")
-            self.config_settings['ant1-antdelu'].set("-0.045")
+            self.config_settings['ant1-antdelu'].set("0.045")  # Changé de -0.045 à 0.045
 
     def view_pos_file(self, pos_file_path):
         """Open .pos file with default system viewer"""

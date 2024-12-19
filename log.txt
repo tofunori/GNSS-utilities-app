@@ -1,0 +1,27 @@
+=== Session démarrée le 2024-12-19 18:08:30 ===
+[2024-12-19 18:08:30] RTKLIB executable chargé automatiquement
+[2024-12-19 18:08:30] Fichier de configuration RTKLIB chargé automatiquement
+
+==================================================
+=== Nouvelle session démarrée le 2024-12-19 18:10:34 ===
+==================================================
+[2024-12-19 18:10:34] RTKLIB executable chargé automatiquement
+[2024-12-19 18:10:34] Fichier de configuration RTKLIB chargé automatiquement
+[2024-12-19 18:10:53] Configuration antenne mise à jour:
+[2024-12-19 18:10:53] Offset rover (ant1) appliqué: 0.180 m
+
+==================================================
+=== Nouvelle session démarrée le 2024-12-19 18:11:19 ===
+==================================================
+[2024-12-19 18:11:19] RTKLIB executable chargé automatiquement
+[2024-12-19 18:11:19] Fichier de configuration RTKLIB chargé automatiquement
+[2024-12-19 18:11:24] Configuration antenne mise à jour:
+[2024-12-19 18:11:24] Offset rover (ant1) appliqué: 0.180 m
+
+==================================================
+=== Nouvelle session démarrée le 2024-12-19 18:15:49 ===
+==================================================
+[2024-12-19 18:15:49] RTKLIB executable chargé automatiquement
+[2024-12-19 18:15:49] Fichier de configuration RTKLIB chargé automatiquement
+[2024-12-19 18:15:59] Configuration antenne mise à jour:
+[2024-12-19 18:15:59] Offset rover (ant1) appliqué: 0.180 m
